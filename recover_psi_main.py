@@ -41,7 +41,7 @@ for itime in range(nt):
     u = destagger(u, stagger_dim=-1).astype(prc)
     v = destagger(v, stagger_dim=-2).astype(prc)
 
-    Z = getvar(wrfout, "z", timeidx=itime)   # geopotential height
+    Z = getvar(wrfout, "z", timeidx=itime).values   # geopotential height
     nz,ny,nx = Z.shape
 
     psi = Z*g/f0  
@@ -49,10 +49,9 @@ for itime in range(nt):
 
     prc = np.float32
 
-    psi = psi.astype(prc)
+    #psi = psi.astype(prc)
     avo = getvar(wrfout, 'avo', timeidx=itime, meta=False).astype(prc)
     rvo = avo*1e-5 - f[None,:,:].astype(prc)
-    streamfunc = np.zeros((nz,ny,nx), dtype=prc)
     rdx = rdx.astype(np.int16)
     msfm = msfm.astype(prc)
 
