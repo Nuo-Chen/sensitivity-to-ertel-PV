@@ -144,6 +144,14 @@ function ∂xy(s::Array{T,3}, dx::Int, dy::Int, mf::Array{T,3}) where {T<:Abstra
     ret = ∂y(∂x(s, dx, mf), dy, mf)
 end
 
+function ∂xπ(s::Array{T,3}, dx::Int, h::Array{T,3}, mf::Array{T,3}) where {T<:AbstractFloat}
+    ret = ∂π(∂x(s, dx, mf), h)
+end
+
+function ∂yπ(s::Array{T,3}, dy::Int, h::Array{T,3}, mf::Array{T,3}) where {T<:AbstractFloat}
+    ret = ∂π(∂y(s, dy, mf), h)
+end
+
 """calculate 1st order central finite differencing along vertical coordinate
 Sundqvist and Veronis 1970
 ------------

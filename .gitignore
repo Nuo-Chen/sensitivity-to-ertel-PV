@@ -6,6 +6,7 @@ __pycache__/*
 submit.*
 *.nc
 *.npy
-$.pyc
+*.npz
+*.pyc
 monthly.mean/*
 SB fourier analysis/*
