@@ -4,147 +4,563 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ e5469a28-8456-11ec-2293-4b6e9a69d596
+# ╔═╡ 9c29bb0c-d7b1-11ec-21a2-93b5dc43f895
 begin
-	using Pkg
-	using NPZ, NCDatasets
-	using JuMP, Ipopt
+	using Plots
+	using NPZ
+	using PlutoUI
 end
 
-# ╔═╡ 679357c4-992b-4f38-8bb8-e1ca94893415
-using Plots
+# ╔═╡ e544c557-4706-43bc-ae1b-6b036a0a312e
+begin 
+	nx = 20
+	ny = 10
+	#nz = 5
+	nz = 20
+	nxyz = nx*ny*nz
 
-# ╔═╡ 419d8147-ba62-4062-9c7d-afe9e32838d2
-using ADCME
-
-# ╔═╡ eb5064d5-b25a-45e7-9abb-569224a7f293
-function ingredients(path::String)
-	# this is from the Julia source code (evalfile in base/loading.jl)
-	# but with the modification that it returns the module instead of the last object
-	name = Symbol(basename(path))
-	m = Module(name)
-	Core.eval(m,
-        Expr(:toplevel,
-             :(eval(x) = $(Expr(:core, :eval))($name, x)),
-             :(include(x) = $(Expr(:top, :include))($name, x)),
-             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, $name, x)),
-             :(include($path))))
-	m
-end
-
-# ╔═╡ f34840c3-654d-417f-acb2-2369e851f450
-begin
-	grad = ingredients("/Volumes/Scratch/nchen67/ertel_inv/gradient1.jl")
-	adjt = ingredients("/Volumes/Scratch/nchen67/ertel_inv/adjoint1.jl")
-end
-
-# ╔═╡ 9e01f440-0419-436f-910d-6766e6b4130f
-path = "/Volumes/Scratch/nchen67/ertel_inv/"
-
-# ╔═╡ 45051427-8f5a-4798-9603-ef4cf00682ab
-begin
-	ψ_bs = npzread(path*"psi_bs20lev.npy")
-	ϕ_bs = npzread(path*"phi_bs20lev.npy")
-	frompython = npzread(path*"forjulia.npz")
-	rdx = Float64.(frompython["rdx"])
-	rdy = Float64.(frompython["rdy"])
-	A = frompython["A"]
-	msfm = frompython["msfm"]
+	biga = zeros(Int8, nx,ny,nz);
+	a = reshape(collect(Int32, 1:1:nxyz), (nx,ny,nz))
+	v = vec(a)
+	
+	frompython = npzread("/Volumes/Scratch/nchen67/ertel_inv/forjulia.npz")
 	dπ = frompython["dexner"]
-	f = frompython["f"]
-	ψ̂ = npzread(path*"apsi20lev.npy");
-	
-	
-	ψ_bs_xyz = Float64.(permutedims(ψ_bs,[3,2,1]))
-	ϕ_bs_xyz = permutedims(ϕ_bs,[3,2,1])
-	msfm_xyz = repeat(permutedims(msfm,[2,1]), outer = [1,1, 20])
-	f_xyz = repeat(permutedims(f,[2,1]), outer = [1,1, 20])
-	ψ̂_xyz = permutedims(ψ̂,[3,2,1])
-	
-	A_xyz = permutedims(repeat(A, outer=[1,209,143]), [2, 3, 1])
-	dπ_xyz = permutedims(repeat(dπ, outer=[1,209,143]), [2, 3, 1])
+	f = permutedims(frompython["f"], [2, 1])[1:nx, 1:ny]
+	f3d = zeros(nx,ny,nz)
+	for k=1:nz
+	    f3d[:,:,k] = f
+	end
+	msfm = ones(nx,ny)#permutedims(frompython["msfm"], [2, 1])
+	h = dπ
+	dx = 1
+	dy = 1
 end
 
-# ╔═╡ 9dd29d26-472d-4f90-a569-8756edad8568
-size(msfm), size(ψ_bs), size(f), size(ψ̂)
+# ╔═╡ b741ba5b-57f5-41c6-866d-06c8b64c6b6a
+# function logop(row::Int64, m::Int64, n::Int64, l::Int64, op::Float32, a::Array{Float32, 2})
+function logop(row, m, n, l, op, a)
+	nx = 20
+	ny = 10
+	col = ((l-1)*ny + n -1)*nx + m
+	a[col, row] = op
+	return a
+end
 
-# ╔═╡ b1c5bf04-c741-4642-ab5c-b6ec5ea3fd18
-size(msfm_xyz), size(ψ_bs_xyz), size(f_xyz), size(ψ̂_xyz)
+# ╔═╡ fadea17c-9edf-4af2-8ad8-522e6c746659
+begin 
+	∂x = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	
+	    coef = 1/dx * msfm[i,j]
+	    ∂x = logop(tijk, ip1, j, k, 1/2*coef, ∂x)
+	    ∂x = logop(tijk, im1, j, k, -1/2*coef, ∂x)
+	end
+	
+	∂y = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	
+	    coef = 1/dy * msfm[i,j]
+	    ∂y = logop(tijk, i, jp1, k, 1/2*coef, ∂y)
+	    ∂y = logop(tijk, i, jm1, k, -1/2*coef, ∂y)
+	end
+	
+	∂π = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    ∂π = logop(tijk, i, j, kp1, 1/(h[k]*(1+h[k]/h[km1])), ∂π)
+	    ∂π = logop(tijk, i, j, km1, -h[k]/(h[km1]^2+h[k]*h[km1]), ∂π)
+	    ∂π = logop(tijk, i, j, k, 1/h[km1]-1/h[k], ∂π)
+	end
 
-# ╔═╡ ffc108c0-daa9-42b2-9089-70e081732356
-rhs = adjt.UP(ψ̂_xyz, ψ_bs_xyz, ϕ_bs_xyz, rdx, rdy, msfm_xyz, f_xyz)
+	∂²x = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	
+	    coef = 1/dx^2 * msfm[i,j]^2
+	    ∂²x = logop(tijk, ip1, j, k, coef, ∂²x)
+	    ∂²x = logop(tijk, im1, j, k, coef, ∂²x)
+	    ∂²x = logop(tijk, i, j, k, -2*coef, ∂²x)
+	end
 
-# ╔═╡ 18a2d75b-8dde-4046-8dbd-fece3d8e9267
-rhsnew = permutedims(rhs,[3,2,1]);
+	∂²y = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	
+	    coef = 1/dy^2 * msfm[i,j]^2
+	    ∂²y = logop(tijk, i, jp1, k, coef, ∂²y)
+	    ∂²y = logop(tijk, i, jm1, k, coef, ∂²y)
+	    ∂²y = logop(tijk, i, j, k, -2*coef, ∂²y)
+	end
+	
+	∂²xy = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    im1 = max(i-1,1)
+	    jp1 = min(j+1,ny)
+	    ip1 = min(i+1,nx)
+	
+	    coef = 1/dx/dy * msfm[i,j]^2
+	    ∂²xy = logop(tijk, ip1, jp1, k, 1/4*coef, ∂²xy)
+	    ∂²xy = logop(tijk, im1, jm1, k, 1/4*coef, ∂²xy)
+	    ∂²xy = logop(tijk, im1, jp1, k, -1/4*coef, ∂²xy)
+	    ∂²xy = logop(tijk, ip1, jm1, k, -1/4*coef, ∂²xy)
+	end
+	
+	∂²xπ  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dx * msfm[i,j]
+	    coefkp1 = 1/(h[k]*(1+h[k]/h[km1]))
+	    coefk = 1/h[km1]-1/h[k]
+	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
+	    
+	    ∂²xπ = logop(tijk, ip1, j, kp1, 1/2*coefh*coefkp1, ∂²xπ)
+	    ∂²xπ = logop(tijk, im1, j, kp1, -1/2*coefh*coefkp1, ∂²xπ)
+	    ∂²xπ = logop(tijk, ip1, j, k, 1/2*coefh*coefk, ∂²xπ)
+	    ∂²xπ = logop(tijk, im1, j, k, -1/2*coefh*coefk, ∂²xπ)
+	    ∂²xπ = logop(tijk, ip1, j, km1, 1/2*coefh*coefkm1, ∂²xπ)
+	    ∂²xπ = logop(tijk, im1, j, km1, -1/2*coefh*coefkm1, ∂²xπ)
+	end
+	
+	∂²yπ  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dy * msfm[i,j]
+	    coefkp1 = 1/(h[k]*(1+h[k]/h[km1]))
+	    coefk = 1/h[km1]-1/h[k]
+	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
+	    
+	    ∂²yπ = logop(tijk, i, jp1, kp1, 1/2*coefh*coefkp1, ∂²yπ)
+	    ∂²yπ = logop(tijk, i, jm1, kp1, -1/2*coefh*coefkp1, ∂²yπ)
+	    ∂²yπ = logop(tijk, i, jp1, k, 1/2*coefh*coefk, ∂²yπ)
+	    ∂²yπ = logop(tijk, i, jm1, k, -1/2*coefh*coefk, ∂²yπ)
+	    ∂²yπ = logop(tijk, i, jp1, km1, 1/2*coefh*coefkm1, ∂²yπ)
+	    ∂²yπ = logop(tijk, i, jm1, km1, -1/2*coefh*coefkm1, ∂²yπ)
+	end
+	
+	∂²π = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    ∂²π = logop(tijk, i, j, kp1, 2/(h[k]*(h[k]+h[km1])), ∂²π)
+	    ∂²π = logop(tijk, i, j, km1, 2/(h[km1]*(h[k]+h[km1])), ∂²π)
+	    ∂²π = logop(tijk, i, j, k, -2/h[k]/h[km1], ∂²π)
+	end
+	
+	∇² = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 3:ny-2, i in 3:nx-2
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    im1 = max(i-1,1)
+	    jp1 = min(j+1,ny)
+	    ip1 = min(i+1,nx)
+	
+	    ∇² = logop(tijk, i, jm1, k, 1., ∇²)
+	    ∇² = logop(tijk, im1, j, k, 1., ∇²)
+	    ∇² = logop(tijk, i, j, k, -4., ∇²)
+	    ∇² = logop(tijk, i, jp1, k, 1., ∇²)
+	    ∇² = logop(tijk, im1, j, k, 1., ∇²)
+	end
+	String("1st and 2nd order")
+end
 
-# ╔═╡ 61286533-d2c1-437e-8b0c-96ce549742e7
-p9 = contour(rhsnew[20,:,:], title=string(20))
-
-# ╔═╡ aaea8ba3-efc9-4677-8c60-81380f0a83ce
-
-
-# ╔═╡ 907c27d7-2533-46e7-a3a6-616a70772e34
+# ╔═╡ 7bc9072a-a263-4e50-9374-84ae3116ad39
 begin
-	m = Model(Ipopt.Optimizer)
-	#set_time_limit_sec(model, 60.0)
-
-#	@variable(m, q̂[1:209, 1:143, 1:20])
-	q̂ = Array{Float64}(undef, 209,143,20)
+	∂³x = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	    im2 = max(i-2,1)
+	    ip2 = min(i+2,nx)
 	
-	myexpr = q̂
-	@variable(m, aux)
-	@constraint(m, aux == myexpr)
-#	@objective(m, Min, rhs .- adjt.φP(q̂, ψ_bs_xyz, ϕ_bs_xyz, dπ_xyz, rdx, rdy, msfm_xyz, A_xyz, f_xyz))
+	    coef = 1/dx^3 * msfm[i,j]^3
+	    ∂³x = logop(tijk, ip2, j, k, 1/2*coef, ∂³x)
+	    ∂³x = logop(tijk, ip1, j, k, -coef, ∂³x)
+	    ∂³x = logop(tijk, im1, j, k, coef, ∂³x)
+	    ∂³x = logop(tijk, im2, j, k, -1/2*coef, ∂³x)
 	
-#	optimize!(m)
+	end
 	
-#	q̂_fin = value.(q̂)
+	∂³y = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	    jm2 = max(j-2,1)
+	    jp2 = min(j+2,ny)
+	
+	    coef = 1/dy^3 * msfm[i,j]^3
+	    ∂³y = logop(tijk, i, jp2, k, 1/2*coef, ∂³y)
+	    ∂³y = logop(tijk, i, jm1, k, -coef, ∂³y)
+	    ∂³y = logop(tijk, i, jp1, k, coef, ∂³y)
+	    ∂³y = logop(tijk, i, jm2, k, -1/2*coef, ∂³y)
+	
+	end
+	
+	∂³xy2 = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	
+	    coef = 1/dx/dy^2 * msfm[i,j]^3
+	    ∂³xy2 = logop(tijk, ip1, jp1, k, 1/4*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, ip1, jm1, k, 1/4*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, ip1, j, k, -1/2*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, im1, jp1, k, -1/4*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, im1, jm1, k, -1/4*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, im1, j, k, 1/2*coef, ∂³xy2)
+	
+	end
+	
+	∂³x2y = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	
+	    coef = 1/dx^2/dy * msfm[i,j]^3
+	    ∂³x2y = logop(tijk, ip1, jp1, k, 1/4*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, im1, jp1, k, 1/4*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, i, jp1, k, -1/2*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, ip1, jm1, k, -1/4*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, im1, jm1, k, -1/4*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, i, jm1, k, 1/2*coef, ∂³x2y)
+	end
+	String("3rd order")
 end
 
-# ╔═╡ cad5ad46-0f29-4053-9fe1-3d3d5e5ce049
+# ╔═╡ d8843137-6e71-40a7-9251-3a1221ce7ce2
 begin
-	b = rand(1:10 ,(209,143,20))
-	md = Model(Ipopt.Optimizer)
+	∇⁴ = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz, j in 3:ny-2, i in 3:nx-2
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    im1 = max(i-1,1)
+	    jp1 = min(j+1,ny)
+	    ip1 = min(i+1,nx)
+	    jm2 = max(j-2,1)
+	    im2 = max(i-2,1)
+	    jp2 = min(j+2,ny)
+	    ip2 = min(i+2,nx)
 	
-	@variable(md, a[1:209, 1:143, 1:20])
-	myexp = @NLexpression(md, sum(adjt.∇²(a, rdx, rdy, msfm_xyz)[i,j,k] for i in 1:209, j in 1:143, k in 1:20))
-	#fun(a) = sum(abs.(b .- adjt.∇²(a, rdx, rdy, msfm_xyz)))
-	#register(md, :fun, 3, fun, autodiff=true)
+	
+	    ∇⁴ = logop(tijk, ip2, j, k, 1., ∇⁴)
+	    ∇⁴ = logop(tijk, im2, j, k, 1., ∇⁴)
+	    ∇⁴ = logop(tijk, i, jp2, k, 1., ∇⁴)
+	    ∇⁴ = logop(tijk, i, jm2, k, 1., ∇⁴)
+	    ∇⁴ = logop(tijk, ip1, j, k, -8., ∇⁴)
+	    ∇⁴ = logop(tijk, im1, j, k, -8., ∇⁴)
+	    ∇⁴ = logop(tijk, i, jp1, k, -8., ∇⁴)
+	    ∇⁴ = logop(tijk, i, jm1, k, -8., ∇⁴)
+	    ∇⁴ = logop(tijk, ip1, jp1, k, 2., ∇⁴)
+	    ∇⁴ = logop(tijk, im1, jm1, k, 2., ∇⁴)
+	    ∇⁴ = logop(tijk, ip1, jm1, k, 2., ∇⁴)
+	    ∇⁴ = logop(tijk, im1, jp1, k, 2., ∇⁴)
+	    ∇⁴ = logop(tijk, i, j, k, 20., ∇⁴)
+	end
+	
+	∂⁴x3π  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	    im2 = max(i-2,1)
+	    ip2 = min(i+2,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dx^3 * msfm[i,j]^3
+	    coefkp1 = 1/(h[k]*(1+h[k]/h[km1]))
+	    coefk = 1/h[km1]-1/h[k]
+	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
+	    
+	    ∂⁴x3π = logop(tijk, ip2, j, kp1, 1/2*coefh*coefkp1, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, ip1, j, kp1, -coefh*coefkp1, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, im1, j, kp1, coefh*coefkp1, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, im2, j, kp1, -1/2*coefh*coefkp1, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, ip2, j, k, 1/2*coefh*coefk, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, ip1, j, k, -coefh*coefk, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, im1, j, k, coefh*coefk, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, im2, j, k, -1/2*coefh*coefk, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, ip2, j, km1, 1/2*coefh*coefkm1, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, ip1, j, km1, -coefh*coefkm1, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, im1, j, km1, coefh*coefkm1, ∂⁴x3π)
+	    ∂⁴x3π = logop(tijk, im2, j, km1, -1/2*coefh*coefkm1, ∂⁴x3π)
+	end
+	
+	∂⁴y3π  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	    jm2 = max(j-2,1)
+	    jp2 = min(j+2,ny)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dy^3 * msfm[i,j]^3
+	    coefkp1 = 1/(h[k]*(1+h[k]/h[km1]))
+	    coefk = 1/h[km1]-1/h[k]
+	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
+	    
+	    ∂⁴y3π = logop(tijk, i, jp2, kp1, 1/2*coefh*coefkp1, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jp1, kp1, -coefh*coefkp1, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jm1, kp1, coefh*coefkp1, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jm2, kp1, -1/2*coefh*coefkp1, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jp2, k, 1/2*coefh*coefk, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jp1, k, -coefh*coefk, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jm1, k, coefh*coefk, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jm2, k, -1/2*coefh*coefk, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jp2, km1, 1/2*coefh*coefkm1, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jp1, km1, -coefh*coefkm1, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jm1, km1, coefh*coefkm1, ∂⁴y3π)
+	    ∂⁴y3π = logop(tijk, i, jm2, km1, -1/2*coefh*coefkm1, ∂⁴y3π)
+	end
+	
+	∂⁴x2π2  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dx^2 * msfm[i,j]^2
+	    coefkp1 = 2/(h[k]*(h[k]+h[km1]))
+	    coefk = -2/h[k]/h[km1]
+	    coefkm1 = 2/(h[km1]*(h[k]+h[km1]))
+	            
+	    ∂⁴x2π2 = logop(tijk, ip1, j, kp1, coefh*coefkp1, ∂⁴x2π2)
+	    ∂⁴x2π2 = logop(tijk, i, j, kp1, -2*coefh*coefkp1, ∂⁴x2π2)
+	    ∂⁴x2π2 = logop(tijk, im1, j, kp1, coefh*coefkp1, ∂⁴x2π2)
+	    ∂⁴x2π2 = logop(tijk, ip1, j, k, coefh*coefk, ∂⁴x2π2)
+	    ∂⁴x2π2 = logop(tijk, i, j, k, -2*coefh*coefk, ∂⁴x2π2)
+	    ∂⁴x2π2 = logop(tijk, im1, j, k, coefh*coefk, ∂⁴x2π2)
+	    ∂⁴x2π2 = logop(tijk, ip1, j, km1, coefh*coefkm1, ∂⁴x2π2)
+	    ∂⁴x2π2 = logop(tijk, i, j, km1, -2*coefh*coefkm1, ∂⁴x2π2)
+	    ∂⁴x2π2 = logop(tijk, im1, j, km1, coefh*coefkm1, ∂⁴x2π2)
+	end
+	
+	∂⁴y2π2  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dy^2 * msfm[i,j]^2
+	    coefkp1 = 2/(h[k]*(h[k]+h[km1]))
+	    coefk = -2/h[k]/h[km1]
+	    coefkm1 = 2/(h[km1]*(h[k]+h[km1]))
+	            
+	    ∂⁴y2π2 = logop(tijk, i, jp1, kp1, coefh*coefkp1, ∂⁴y2π2)
+	    ∂⁴y2π2 = logop(tijk, i, j, kp1, -2*coefh*coefkp1, ∂⁴y2π2)
+	    ∂⁴y2π2 = logop(tijk, i, jm1, kp1, coefh*coefkp1, ∂⁴y2π2)
+	    ∂⁴y2π2 = logop(tijk, i, jp1, k, coefh*coefk, ∂⁴y2π2)
+	    ∂⁴y2π2 = logop(tijk, i, j, k, -2*coefh*coefk, ∂⁴y2π2)
+	    ∂⁴y2π2 = logop(tijk, i, jm1, k, coefh*coefk, ∂⁴y2π2)
+	    ∂⁴y2π2 = logop(tijk, i, jp1, km1, coefh*coefkm1, ∂⁴y2π2)
+	    ∂⁴y2π2 = logop(tijk, i, j, km1, -2*coefh*coefkm1, ∂⁴y2π2)
+	    ∂⁴y2π2 = logop(tijk, i, jm1, km1, coefh*coefkm1, ∂⁴y2π2)
+	end
 	
 	
-#	typeof(a)
-#	typeof(adjt.∇²(a, rdx, rdy, msfm_xyz))
-#	for i in 1:209, j in 1:143, k in 1:20
-#		@constraint(md, a[i,j,k]>=0 )
-#	end
+	∂⁴xy2π = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    im1 = max(i-1,1)
+	    jp1 = min(j+1,ny)
+	    ip1 = min(i+1,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
 	
-#	d = 2; e=4;g = 2;
-#	
-#	@NLobjective(md, Min, fun(a))
-	@NLobjective(md, Min, myexp)	
-	optimize!(md)
+	    coefh = 1/dx/dy^2 * msfm[i,j]^3
+	    coefkp1 = 1/(h[k]*(1+h[k]/h[km1]))
+	    coefk = 1/h[km1]-1/h[k]
+	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
+	    
+	    ∂⁴xy2π = logop(tijk, ip1, jp1, kp1, 1/4*coefh*coefkp1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, ip1, jm1, kp1, 1/4*coefh*coefkp1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, ip1, j, kp1, -1/2*coefh*coefkp1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, im1, jp1, kp1, -1/4*coefh*coefkp1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, im1, jm1, kp1, -1/4*coefh*coefkp1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, im1, j, kp1, 1/2*coefh*coefkp1, ∂⁴xy2π)
+	    
+	    ∂⁴xy2π = logop(tijk, ip1, jp1, k, 1/4*coefh*coefk, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, ip1, jm1, k, 1/4*coefh*coefk, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, ip1, j, k, -1/2*coefh*coefk, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, im1, jp1, k, -1/4*coefh*coefk, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, im1, jm1, k, -1/4*coefh*coefk, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, im1, j, k, 1/2*coefh*coefk, ∂⁴xy2π)
+	    
+	    ∂⁴xy2π = logop(tijk, ip1, jp1, km1, 1/4*coefh*coefkm1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, ip1, jm1, km1, 1/4*coefh*coefkm1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, ip1, j, km1, -1/2*coefh*coefkm1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, im1, jp1, km1, -1/4*coefh*coefkm1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, im1, jm1, km1, -1/4*coefh*coefkm1, ∂⁴xy2π)
+	    ∂⁴xy2π = logop(tijk, im1, j, km1, 1/2*coefh*coefkm1, ∂⁴xy2π)
+	end
 	
-	a_fin = value.(a)
+	∂⁴x2yπ = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    im1 = max(i-1,1)
+	    jp1 = min(j+1,ny)
+	    ip1 = min(i+1,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	
+	    coefh = 1/dx/dy^2 * msfm[i,j]^3
+	    coefkp1 = 1/(h[k]*(1+h[k]/h[km1]))
+	    coefk = 1/h[km1]-1/h[k]
+	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
+	    
+	    ∂⁴x2yπ = logop(tijk, ip1, jp1,  kp1, 1/4*coefh*coefkp1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, im1, jp1, kp1, 1/4*coefh*coefkp1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, i, jp1, kp1, -1/2*coefh*coefkp1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, ip1, jm1, kp1, -1/4*coefh*coefkp1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, im1, jm1, kp1, -1/4*coefh*coefkp1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, i, jm1, kp1, 1/2*coefh*coefkp1, ∂⁴x2yπ)
+	    
+	    ∂⁴x2yπ = logop(tijk, ip1, jp1,  k, 1/4*coefh*coefk, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, im1, jp1, k, 1/4*coefh*coefk, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, i, jp1, k, -1/2*coefh*coefk, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, ip1, jm1, k, -1/4*coefh*coefk, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, im1, jm1, k, -1/4*coefh*coefk, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, i, jm1, k, 1/2*coefh*coefk, ∂⁴x2yπ)
+	    
+	    
+	    ∂⁴x2yπ = logop(tijk, ip1, jp1, km1, 1/4*coefh*coefkm1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, im1, jp1, km1, 1/4*coefh*coefkm1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, i, jp1, km1, -1/2*coefh*coefkm1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, ip1, jm1, km1, -1/4*coefh*coefkm1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, im1, jm1, km1, -1/4*coefh*coefkm1, ∂⁴x2yπ)
+	    ∂⁴x2yπ = logop(tijk, i, jm1, km1, 1/2*coefh*coefkm1, ∂⁴x2yπ)
+	end
+	String("4th order")
 end
+
+
+# ╔═╡ 20b9a236-fe70-41f6-8084-e54b3986f99f
+begin
+	fx = ∂x*vec(f3d)
+	fy = ∂y*vec(f3d)
+	fx∂²π = zeros(Float32, nxyz, nxyz)
+	fy∂²π = zeros(Float32, nxyz, nxyz)
+	fx∂²xπ = zeros(Float32, nxyz, nxyz)
+	fy∂²xπ = zeros(Float32, nxyz, nxyz)
+	fx∂²yπ = zeros(Float32, nxyz, nxyz)
+	fy∂²yπ = zeros(Float32, nxyz, nxyz)
+	
+	f∇² = zeros(Float32, nxyz, nxyz)
+	for i in eachindex(fx)
+	    fx∂²π[:,i] = fx.*∂²π[:,i]
+	    fy∂²π[:,i] = fy.*∂²π[:,i]
+	    fx∂²xπ[:,i] = fx.*∂²xπ[:,i]
+	    fy∂²xπ[:,i] = fy.*∂²xπ[:,i]
+	    fx∂²yπ[:,i] = fx.*∂²yπ[:,i]
+	    fy∂²yπ[:,i] = fy.*∂²yπ[:,i]
+	    f∇²[:,i] = vec(f3d).*∇²[:,i]
+	end
+	f∇²∂²π = f∇²*∂²π
+	f∇²∂²xπ = f∇²*∂²xπ
+	f∇²∂²yπ = f∇²*∂²yπ
+	
+	∇f∇∂²π = fx∂²π .+ fy∂²π .+ f∇²∂²π
+	∇f∇∂²xπ = fx∂²xπ .+ fy∂²xπ .+ f∇²∂²xπ
+	∇f∇∂²yπ = fx∂²yπ .+ fy∂²yπ .+ f∇²∂²yπ
+	surp = 1
+	String("∇f∇ terms")
+end
+
+# ╔═╡ 9ecdd276-8b58-42b4-9ecc-cbf392dce38a
+begin
+	xx = repeat(collect(Int32, 1:nx)/nx, outer=(1,ny))
+	yy = repeat(transpose(collect(Int32, 1:ny)/ny), outer=(nx,1))
+	dst = sqrt.((xx.-0.55).^2 + (yy.-0.55).^2)
+	gauss = repeat(exp.(-(dst.^2)/2), outer=(1,1,nz))
+	for i in 1:nx, j in 1:ny
+		gauss[i,j,:] .*= sin.(collect(1:nz))
+	end
+	supressout1 = 0
+end
+
+# ╔═╡ a3665145-5439-47fa-99e1-5ec673d288d4
+begin
+	# ∇²gauss = reshape(∇²*vec(gauss), (nx, ny,nz))
+	# ∇⁴gauss = reshape(∇⁴*vec(gauss), (nx, ny,nz))
+	# gaussₖ = reshape(∂π*vec(gauss), (nx, ny,nz))
+	# gaussₖₖ = reshape(∂²π*vec(gauss), (nx, ny,nz))
+	# dxyyπgauss = reshape(∂³x2y* ∂π*vec(gauss), (nx, ny,nz)) #∂π
+	d∇f∇ππgauss = reshape(∇f∇∂²π*vec(gauss), (nx, ny,nz))
+	# dxxyygauss = reshape((∂²x+∂²y)*vec(gauss), (nx, ny,nz))
+
+	supressout2 = 0
+end
+
+
+# ╔═╡ 8b2befe5-893c-4a48-9108-7aa65ff4c505
+#heatmap(∇⁴gauss[:,:,3])
+#heatmap((∇⁴-∇²*∇²)[1:100,1:100])
+#heatmap(gaussₖₖ[1,:,:])
+# heatmap((∂y*∂y)[1:500,1:500])
+# heatmap((dyπgauss)[7,:,:])
+# heatmap((d2yπgauss)[7,:,:])
+heatmap((d∇f∇ππgauss)[:,:,5])
+# heatmap((d4xyyπgauss)[:,4,:])
+
+# ╔═╡ 39b3c278-8573-4811-8166-595d9e0f85d5
+heatmap((∇f∇∂²yπ)[1:250,1:250]) 
+
+# ╔═╡ 6f875294-604d-41a9-83cf-a8145c41357d
+heatmap((∂⁴x2yπ)[3500:4000,3500:4000]) 
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-ADCME = "07b341a0-ce75-57c6-b2de-414ffdc00be5"
-Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
-JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
-NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
-Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
-ADCME = "~0.7.3"
-Ipopt = "~0.9.1"
-JuMP = "~0.22.3"
-NCDatasets = "~0.11.9"
-NPZ = "~0.4.1"
-Plots = "~1.26.0"
+NPZ = "~0.4.2"
+Plots = "~1.29.0"
+PlutoUI = "~0.7.39"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -154,23 +570,11 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 julia_version = "1.7.1"
 manifest_format = "2.0"
 
-[[deps.ADCME]]
-deps = ["CMake", "FFTW", "LibGit2", "Libdl", "LinearAlgebra", "MAT", "Pkg", "PyCall", "Random", "SparseArrays", "SpecialFunctions", "Statistics"]
-git-tree-sha1 = "4ecfc24dbdf551f92b5de7ea2d99da3f7fde73c9"
-uuid = "07b341a0-ce75-57c6-b2de-414ffdc00be5"
-version = "0.7.3"
-
-[[deps.ASL_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "6252039f98492252f9e47c312c8ffda0e3b9e78d"
-uuid = "ae81ac8f-d209-56e5-92de-9978fef736f9"
-version = "0.1.3+0"
-
-[[deps.AbstractFFTs]]
-deps = ["ChainRulesCore", "LinearAlgebra"]
-git-tree-sha1 = "6f1d9bc1c08f9f4a8fa92e3ea3cb50153a1b40d4"
-uuid = "621f4979-c628-5d54-868e-fcf4e3e8185c"
-version = "1.1.0"
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "8eaf9f1b4921132a4cff3f36a1d9ba923b14a481"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.1.4"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra"]
@@ -187,47 +591,11 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
-[[deps.BenchmarkTools]]
-deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
-git-tree-sha1 = "be0cff14ad0059c1da5a017d66f763e6a637de6a"
-uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
-version = "1.3.0"
-
-[[deps.BinDeps]]
-deps = ["Libdl", "Pkg", "SHA", "URIParser", "Unicode"]
-git-tree-sha1 = "1289b57e8cf019aede076edab0587eb9644175bd"
-uuid = "9e28174c-4ba2-5203-b857-d8d62c4213ee"
-version = "1.0.2"
-
-[[deps.BinaryProvider]]
-deps = ["Libdl", "Logging", "SHA"]
-git-tree-sha1 = "ecdec412a9abc8db54c0efc5548c64dfce072058"
-uuid = "b99e7846-7c00-51b0-8f62-c81ae34c0232"
-version = "0.5.10"
-
-[[deps.BufferedStreams]]
-deps = ["Compat", "Test"]
-git-tree-sha1 = "5d55b9486590fdda5905c275bb21ce1f0754020f"
-uuid = "e1450e63-4bb3-523b-b2a4-4ffa8c0fd77d"
-version = "1.0.0"
-
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.8+0"
-
-[[deps.CFTime]]
-deps = ["Dates", "Printf"]
-git-tree-sha1 = "bca6cb6ee746e6485ca4535f6cc29cf3579a0f20"
-uuid = "179af706-886a-5703-950a-314cd64e0468"
-version = "0.1.1"
-
-[[deps.CMake]]
-deps = ["BinDeps"]
-git-tree-sha1 = "50a8b41d2c562fccd9ab841085fc7d1e2706da82"
-uuid = "631607c0-34d2-5d66-819e-eb0f9aa2061a"
-version = "1.2.0"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -235,47 +603,35 @@ git-tree-sha1 = "4b859a208b2397a7a623a03449e4636bdb17bcf2"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+1"
 
-[[deps.Calculus]]
-deps = ["LinearAlgebra"]
-git-tree-sha1 = "f641eb0a4f00c343bbc32346e1217b86f3ce9dad"
-uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
-version = "0.5.1"
-
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "f9982ef575e19b0e5c7a98c6e75ee496c0f73a93"
+git-tree-sha1 = "9950387274246d08af38f6eef8cb5480862a435f"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.12.0"
+version = "1.14.0"
 
 [[deps.ChangesOfVariables]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
-git-tree-sha1 = "bf98fa45a0a4cee295de98d4c1462be26345b9a1"
+git-tree-sha1 = "1e315e3f4b0b7ce40feded39c73049692126cf53"
 uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
-version = "0.1.2"
-
-[[deps.CodecBzip2]]
-deps = ["Bzip2_jll", "Libdl", "TranscodingStreams"]
-git-tree-sha1 = "2e62a725210ce3c3c2e1a3080190e7ca491f18d7"
-uuid = "523fee87-0ab8-5b00-afb7-3ecf72e48cfd"
-version = "0.7.2"
-
-[[deps.CodecZlib]]
-deps = ["TranscodingStreams", "Zlib_jll"]
-git-tree-sha1 = "ded953804d019afa9a3f98981d99b33e3db7b6da"
-uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
-version = "0.7.0"
+version = "0.1.3"
 
 [[deps.ColorSchemes]]
-deps = ["ColorTypes", "Colors", "FixedPointNumbers", "Random"]
-git-tree-sha1 = "12fc73e5e0af68ad3137b886e3f7c1eacfca2640"
+deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Random"]
+git-tree-sha1 = "7297381ccb5df764549818d9a7d57e45f1057d30"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.17.1"
+version = "3.18.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "024fe24d83e4a5bf5fc80501a314ce0d1aa35597"
+git-tree-sha1 = "a985dc37e357a3b22b260a5def99f3530fb415d3"
 uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.11.0"
+version = "0.11.2"
+
+[[deps.ColorVectorSpace]]
+deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "SpecialFunctions", "Statistics", "TensorCore"]
+git-tree-sha1 = "3f1f500312161f1ae067abe07d13b40f78f32e07"
+uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
+version = "0.9.8"
 
 [[deps.Colors]]
 deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
@@ -283,27 +639,15 @@ git-tree-sha1 = "417b0ed7b8b838aa6ca0a87aadf1bb9eb111ce40"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.8"
 
-[[deps.CommonSubexpressions]]
-deps = ["MacroTools", "Test"]
-git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
-uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
-version = "0.3.0"
-
 [[deps.Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "SHA", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
-git-tree-sha1 = "44c37b4636bc54afac5c574d2d02b625349d6582"
+git-tree-sha1 = "b153278a25dd42c65abbf4e62344f9d22e59191b"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "3.41.0"
+version = "3.43.0"
 
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-
-[[deps.Conda]]
-deps = ["Downloads", "JSON", "VersionParsing"]
-git-tree-sha1 = "6cdc8832ba11c7695f494c9d9a1c31e90959ce0f"
-uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
-version = "1.6.0"
 
 [[deps.Contour]]
 deps = ["StaticArrays"]
@@ -312,15 +656,15 @@ uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.5.7"
 
 [[deps.DataAPI]]
-git-tree-sha1 = "cc70b17275652eb47bc9e5f81635981f13cea5c8"
+git-tree-sha1 = "fb5f5316dd3fd4c5e7c30a24d50643b73e37cd40"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.9.0"
+version = "1.10.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
-git-tree-sha1 = "3daef5523dd2e769dad2365274f760ff5f282c7d"
+git-tree-sha1 = "cc1a8e22627f33c789ab60b36a9132ac050bbf75"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.18.11"
+version = "0.18.12"
 
 [[deps.DataValueInterfaces]]
 git-tree-sha1 = "bfc1187b79289637fa0ef6d4436ebdfe6905cbd6"
@@ -334,18 +678,6 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 [[deps.DelimitedFiles]]
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-
-[[deps.DiffResults]]
-deps = ["StaticArrays"]
-git-tree-sha1 = "c18e98cba888c6c25d1c3b048e4b3380ca956805"
-uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
-version = "1.0.3"
-
-[[deps.DiffRules]]
-deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
-git-tree-sha1 = "84083a5136b6abf426174a58325ffd159dd6d94f"
-uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
-version = "1.9.1"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -369,9 +701,9 @@ version = "2.2.3+0"
 
 [[deps.Expat_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "ae13fcbc7ab8f16b0856729b050ef0c446aa3492"
+git-tree-sha1 = "bad72f730e9e91c08d9427d5e8db95478a3c323d"
 uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
-version = "2.4.4+0"
+version = "2.4.8+0"
 
 [[deps.FFMPEG]]
 deps = ["FFMPEG_jll"]
@@ -385,17 +717,11 @@ git-tree-sha1 = "d8a578692e3077ac998b50c0217dfd67f21d1e5f"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "4.4.0+0"
 
-[[deps.FFTW]]
-deps = ["AbstractFFTs", "FFTW_jll", "LinearAlgebra", "MKL_jll", "Preferences", "Reexport"]
-git-tree-sha1 = "463cb335fa22c4ebacfd1faba5fde14edb80d96c"
-uuid = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
-version = "1.4.5"
-
-[[deps.FFTW_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "c6033cc3892d0ef5bb9cd29b7f2f0331ea5184ea"
-uuid = "f5851436-0d7a-5f13-b9de-f02708fd171a"
-version = "3.3.10+0"
+[[deps.FileIO]]
+deps = ["Pkg", "Requires", "UUIDs"]
+git-tree-sha1 = "9267e5f50b0e12fdfd5a2455534345c4cf2c7f7a"
+uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+version = "1.14.0"
 
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
@@ -414,12 +740,6 @@ deps = ["Printf"]
 git-tree-sha1 = "8339d61043228fdd3eb658d86c926cb282ae72a8"
 uuid = "59287772-0a20-5a39-b81b-1366585eb4c0"
 version = "0.4.2"
-
-[[deps.ForwardDiff]]
-deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions", "StaticArrays"]
-git-tree-sha1 = "1bd6fc0c344fc0cbee1f42f8d2e7ec8253dda2d2"
-uuid = "f6369f11-7733-5829-9624-2563aa707210"
-version = "0.10.25"
 
 [[deps.FreeType2_jll]]
 deps = ["Artifacts", "Bzip2_jll", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
@@ -441,15 +761,15 @@ version = "3.3.6+0"
 
 [[deps.GR]]
 deps = ["Base64", "DelimitedFiles", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Printf", "Random", "RelocatableFolders", "Serialization", "Sockets", "Test", "UUIDs"]
-git-tree-sha1 = "9f836fb62492f4b0f0d3b06f55983f2704ed0883"
+git-tree-sha1 = "b316fd18f5bc025fedcb708332aecb3e13b9b453"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.64.0"
+version = "0.64.3"
 
 [[deps.GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Pkg", "Qt5Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "a6c850d77ad5118ad3be4bd188919ce97fffac47"
+git-tree-sha1 = "1e5490a51b4e9d07e8b04836f6008f46b48aaa87"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.64.0+0"
+version = "0.64.3+0"
 
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
@@ -480,18 +800,6 @@ git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
 
-[[deps.HDF5]]
-deps = ["Compat", "HDF5_jll", "Libdl", "Mmap", "Random", "Requires"]
-git-tree-sha1 = "ed6c28c220375a214d07fba0e3d3382d8edd779e"
-uuid = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
-version = "0.16.2"
-
-[[deps.HDF5_jll]]
-deps = ["Artifacts", "JLLWrappers", "LibCURL_jll", "Libdl", "OpenSSL_jll", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "fd83fa0bde42e01952757f01149dd968c06c4dba"
-uuid = "0234f1f7-429e-5d53-9886-15a909be8d59"
-version = "1.12.0+1"
-
 [[deps.HTTP]]
 deps = ["Base64", "Dates", "IniFile", "Logging", "MbedTLS", "NetworkOptions", "Sockets", "URIs"]
 git-tree-sha1 = "0fa77022fe4b511826b39c894c90daf5fce3334a"
@@ -504,16 +812,28 @@ git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
 
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.4"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "c47c5fa4c5308f27ccaac35504858d8914e102f9"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.4"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.2"
+
 [[deps.IniFile]]
 git-tree-sha1 = "f550e6e32074c939295eb5ea6de31849ac2c9625"
 uuid = "83e8ac13-25f8-5344-8a64-a9f2b223428f"
 version = "0.5.1"
-
-[[deps.IntelOpenMP_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "d979e54b71da82f3a65b62553da4fc3d18c9004c"
-uuid = "1d5cc7b8-4909-519e-a0f8-d0f5ad9712d0"
-version = "2018.0.3+2"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -521,21 +841,9 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
 [[deps.InverseFunctions]]
 deps = ["Test"]
-git-tree-sha1 = "a7254c0acd8e62f1ac75ad24d5db43f5f19f3c65"
+git-tree-sha1 = "336cc738f03e069ef2cac55a104eb823455dca75"
 uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
-version = "0.1.2"
-
-[[deps.Ipopt]]
-deps = ["BinaryProvider", "Ipopt_jll", "Libdl", "MathOptInterface"]
-git-tree-sha1 = "68ba332ff458f3c1f40182016ff9b1bda276fa9e"
-uuid = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
-version = "0.9.1"
-
-[[deps.Ipopt_jll]]
-deps = ["ASL_jll", "Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "MUMPS_seq_jll", "OpenBLAS32_jll", "Pkg"]
-git-tree-sha1 = "e3e202237d93f18856b6ff1016166b0f172a49a8"
-uuid = "9cc047cb-c261-5740-88fc-0cf96f7bdcc7"
-version = "300.1400.400+0"
+version = "0.1.4"
 
 [[deps.IrrationalConstants]]
 git-tree-sha1 = "7fd44fd4ff43fc60815f8e764c0f352b83c49151"
@@ -570,12 +878,6 @@ git-tree-sha1 = "b53380851c6e6664204efb2e62cd24fa5c47e4ba"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "2.1.2+0"
 
-[[deps.JuMP]]
-deps = ["Calculus", "DataStructures", "ForwardDiff", "JSON", "LinearAlgebra", "MathOptInterface", "MutableArithmetics", "NaNMath", "OrderedCollections", "Printf", "Random", "SparseArrays", "SpecialFunctions", "Statistics"]
-git-tree-sha1 = "fe0f87cc077fc6a23c21e469318993caf2947d10"
-uuid = "4076af6c-e467-56ae-b986-b466b2749572"
-version = "0.22.3"
-
 [[deps.LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "f6250b16881adf048549549fba48b1161acdac8c"
@@ -601,13 +903,9 @@ version = "1.3.0"
 
 [[deps.Latexify]]
 deps = ["Formatting", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "Printf", "Requires"]
-git-tree-sha1 = "4f00cc36fede3c04b8acf9b2e2763decfdcecfa6"
+git-tree-sha1 = "46a39b9c58749eefb5f2dc1178cb8fab5332b1ab"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
-version = "0.15.13"
-
-[[deps.LazyArtifacts]]
-deps = ["Artifacts", "Pkg"]
-uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
+version = "0.15.15"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -682,36 +980,12 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[deps.LogExpFunctions]]
 deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "e5718a00af0ab9756305a0392832c8952c7426c1"
+git-tree-sha1 = "09e4b894ce6a976c354a69041a04748180d43637"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.6"
+version = "0.3.15"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
-
-[[deps.MAT]]
-deps = ["BufferedStreams", "CodecZlib", "HDF5", "SparseArrays"]
-git-tree-sha1 = "971be550166fe3f604d28715302b58a3f7293160"
-uuid = "23992714-dd62-5051-b70f-ba57cb901cac"
-version = "0.10.3"
-
-[[deps.METIS_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "1d31872bb9c5e7ec1f618e8c4a56c8b0d9bddc7e"
-uuid = "d00139f3-1899-568f-a2f0-47f597d42d70"
-version = "5.1.1+0"
-
-[[deps.MKL_jll]]
-deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg"]
-git-tree-sha1 = "5455aef09b40e5020e1520f551fa3135040d4ed0"
-uuid = "856f044c-d86e-5d09-b602-aeab76dc8ba7"
-version = "2021.1.1+2"
-
-[[deps.MUMPS_seq_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "METIS_jll", "OpenBLAS32_jll", "Pkg"]
-git-tree-sha1 = "29de2841fa5aefe615dea179fcde48bb87b58f57"
-uuid = "d7ed1dd3-d0ae-5e8e-bfb4-87a502085b8d"
-version = "5.4.1+0"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
@@ -722,12 +996,6 @@ version = "0.5.9"
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
-
-[[deps.MathOptInterface]]
-deps = ["BenchmarkTools", "CodecBzip2", "CodecZlib", "JSON", "LinearAlgebra", "MutableArithmetics", "OrderedCollections", "Printf", "SparseArrays", "Test", "Unicode"]
-git-tree-sha1 = "625f78c57a263e943f525d3860f30e4d200124ab"
-uuid = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
-version = "0.10.8"
 
 [[deps.MbedTLS]]
 deps = ["Dates", "MbedTLS_jll", "Random", "Sockets"]
@@ -756,34 +1024,16 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 
-[[deps.MutableArithmetics]]
-deps = ["LinearAlgebra", "SparseArrays", "Test"]
-git-tree-sha1 = "842b5ccd156e432f369b204bb704fd4020e383ac"
-uuid = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
-version = "0.3.3"
-
-[[deps.NCDatasets]]
-deps = ["CFTime", "DataStructures", "Dates", "NetCDF_jll", "Printf"]
-git-tree-sha1 = "17e39eb5bbe564f48bdbefbd103bd3f49fcfcb9b"
-uuid = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
-version = "0.11.9"
-
 [[deps.NPZ]]
-deps = ["Compat", "ZipFile"]
-git-tree-sha1 = "fbfb3c151b0308236d854c555b43cdd84c1e5ebf"
+deps = ["Compat", "FileIO", "ZipFile"]
+git-tree-sha1 = "45f77b87cb9ed5b519f31e1590258930f3b840ee"
 uuid = "15e1cf62-19b3-5cfa-8e77-841668bca605"
-version = "0.4.1"
+version = "0.4.2"
 
 [[deps.NaNMath]]
-git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
+git-tree-sha1 = "737a5957f387b17e74d4ad2f440eb330b39a62c5"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
-version = "0.3.7"
-
-[[deps.NetCDF_jll]]
-deps = ["Artifacts", "HDF5_jll", "JLLWrappers", "LibCURL_jll", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Pkg", "Zlib_jll", "nghttp2_jll"]
-git-tree-sha1 = "0cf4d1bf2ef45156aed85c9ac5f8c7e697d9288c"
-uuid = "7243133f-43d8-5620-bbf4-c2c921802cf3"
-version = "400.702.400+0"
+version = "1.0.0"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -793,12 +1043,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "887579a3eb005446d514ab7aeac5d1d027658b8f"
 uuid = "e7412a2a-1a6e-54c0-be00-318e2571c051"
 version = "1.3.5+1"
-
-[[deps.OpenBLAS32_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "9c6c2ed4b7acd2137b878eb96c68e63b76199d0f"
-uuid = "656ef2d0-ae68-5445-9ca0-591084a874a2"
-version = "0.3.17+0"
 
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
@@ -810,9 +1054,9 @@ uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "648107615c15d4e09f7eca16307bc821c1f718d8"
+git-tree-sha1 = "ab05aa4cc89736e95915b01e7279e61b1bfe33b8"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "1.1.13+0"
+version = "1.1.14+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
@@ -839,9 +1083,9 @@ version = "8.44.0+0"
 
 [[deps.Parsers]]
 deps = ["Dates"]
-git-tree-sha1 = "13468f237353112a01b2d6b32f3d0f80219944aa"
+git-tree-sha1 = "1285416549ccfcdf0c50d4997a94331e88d68413"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.2.2"
+version = "2.3.1"
 
 [[deps.Pixman_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -854,48 +1098,44 @@ deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markd
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 
 [[deps.PlotThemes]]
-deps = ["PlotUtils", "Requires", "Statistics"]
-git-tree-sha1 = "a3a964ce9dc7898193536002a6dd892b1b5a6f1d"
+deps = ["PlotUtils", "Statistics"]
+git-tree-sha1 = "8162b2f8547bc23876edd0c5181b27702ae58dce"
 uuid = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
-version = "2.0.1"
+version = "3.0.0"
 
 [[deps.PlotUtils]]
 deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Statistics"]
-git-tree-sha1 = "6f1b25e8ea06279b5689263cc538f51331d7ca17"
+git-tree-sha1 = "bb16469fd5224100e422f0b027d26c5a25de1200"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.1.3"
+version = "1.2.0"
 
 [[deps.Plots]]
-deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "GeometryBasics", "JSON", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
-git-tree-sha1 = "23d109aad5d225e945c813c6ebef79104beda955"
+deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "GeometryBasics", "JSON", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
+git-tree-sha1 = "d457f881ea56bbfa18222642de51e0abf67b9027"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.26.0"
+version = "1.29.0"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
+git-tree-sha1 = "8d1f54886b9037091edf146b517989fc4a09efec"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.39"
 
 [[deps.Preferences]]
 deps = ["TOML"]
-git-tree-sha1 = "2cf929d64681236a2e074ffafb8d568733d2e6af"
+git-tree-sha1 = "47e5f437cc0e7ef2ce8406ce1e7e24d44915f88d"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
-version = "1.2.3"
+version = "1.3.0"
 
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
-[[deps.Profile]]
-deps = ["Printf"]
-uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
-
-[[deps.PyCall]]
-deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
-git-tree-sha1 = "71fd4022ecd0c6d20180e23ff1b3e05a143959c2"
-uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
-version = "1.93.0"
-
 [[deps.Qt5Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
-git-tree-sha1 = "ad368663a5e20dbb8d6dc2fddeefe4dae0781ae8"
+git-tree-sha1 = "c6c0f690d0cc7caddb74cef7aa847b824a16b256"
 uuid = "ea2cea3b-5b76-57ae-a6ef-0a8af62496e1"
-version = "5.15.3+0"
+version = "5.15.3+1"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -912,9 +1152,9 @@ version = "1.2.1"
 
 [[deps.RecipesPipeline]]
 deps = ["Dates", "NaNMath", "PlotUtils", "RecipesBase"]
-git-tree-sha1 = "995a812c6f7edea7527bb570f0ac39d0fb15663c"
+git-tree-sha1 = "dc1e451e15d90347a7decc4221842a022b011714"
 uuid = "01d81517-befc-4cb6-b9ec-a95719d0359c"
-version = "0.5.1"
+version = "0.5.2"
 
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
@@ -970,15 +1210,15 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[deps.SpecialFunctions]]
 deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
-git-tree-sha1 = "f0bccf98e16759818ffc5d97ac3ebf87eb950150"
+git-tree-sha1 = "bc40f042cfcc56230f781d92db71f0e21496dffd"
 uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
-version = "1.8.1"
+version = "2.1.5"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
-git-tree-sha1 = "a635a9333989a094bddc9f940c04c549cd66afcf"
+git-tree-sha1 = "cd56bf18ed715e8b09f06ef8c6b781e6cdc49911"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.3.4"
+version = "1.4.4"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -986,9 +1226,9 @@ uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [[deps.StatsAPI]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "c3d8ba7f3fa0625b062b82853a7d5229cb728b6b"
+git-tree-sha1 = "c82aaa13b44ea00134f8c9c89819477bd3986ecd"
 uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
-version = "1.2.1"
+version = "1.3.0"
 
 [[deps.StatsBase]]
 deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
@@ -998,9 +1238,9 @@ version = "0.33.16"
 
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "StaticArrays", "Tables"]
-git-tree-sha1 = "57617b34fa34f91d536eb265df67c2d4519b8b98"
+git-tree-sha1 = "e75d82493681dfd884a357952bbd7ab0608e1dc3"
 uuid = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
-version = "0.6.5"
+version = "0.6.7"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -1022,21 +1262,20 @@ version = "1.7.0"
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 
+[[deps.TensorCore]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
+uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
+version = "0.1.1"
+
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
-[[deps.TranscodingStreams]]
-deps = ["Random", "Test"]
-git-tree-sha1 = "216b95ea110b5972db65aa90f88d8d89dcb8851c"
-uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.9.6"
-
-[[deps.URIParser]]
-deps = ["Unicode"]
-git-tree-sha1 = "53a9f49546b8d2dd2e688d216421d050c9a31d0d"
-uuid = "30578b45-9adc-5946-b283-645ec420af67"
-version = "0.4.1"
+[[deps.Tricks]]
+git-tree-sha1 = "6bac775f2d42a611cdfcd1fb217ee719630c4175"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.6"
 
 [[deps.URIs]]
 git-tree-sha1 = "97bbe755a53fe859669cd907f2d96aee8d2c1355"
@@ -1060,11 +1299,6 @@ version = "0.4.1"
 git-tree-sha1 = "34db80951901073501137bdbc3d5a8e7bbd06670"
 uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
 version = "0.1.2"
-
-[[deps.VersionParsing]]
-git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
-uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
-version = "1.3.0"
 
 [[deps.Wayland_jll]]
 deps = ["Artifacts", "Expat_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg", "XML2_jll"]
@@ -1288,20 +1522,17 @@ version = "0.9.1+5"
 """
 
 # ╔═╡ Cell order:
-# ╠═e5469a28-8456-11ec-2293-4b6e9a69d596
-# ╠═eb5064d5-b25a-45e7-9abb-569224a7f293
-# ╠═f34840c3-654d-417f-acb2-2369e851f450
-# ╠═9e01f440-0419-436f-910d-6766e6b4130f
-# ╠═45051427-8f5a-4798-9603-ef4cf00682ab
-# ╠═9dd29d26-472d-4f90-a569-8756edad8568
-# ╠═b1c5bf04-c741-4642-ab5c-b6ec5ea3fd18
-# ╠═ffc108c0-daa9-42b2-9089-70e081732356
-# ╠═679357c4-992b-4f38-8bb8-e1ca94893415
-# ╠═18a2d75b-8dde-4046-8dbd-fece3d8e9267
-# ╠═61286533-d2c1-437e-8b0c-96ce549742e7
-# ╠═aaea8ba3-efc9-4677-8c60-81380f0a83ce
-# ╠═907c27d7-2533-46e7-a3a6-616a70772e34
-# ╠═cad5ad46-0f29-4053-9fe1-3d3d5e5ce049
-# ╠═419d8147-ba62-4062-9c7d-afe9e32838d2
+# ╠═9c29bb0c-d7b1-11ec-21a2-93b5dc43f895
+# ╠═e544c557-4706-43bc-ae1b-6b036a0a312e
+# ╠═b741ba5b-57f5-41c6-866d-06c8b64c6b6a
+# ╟─fadea17c-9edf-4af2-8ad8-522e6c746659
+# ╟─7bc9072a-a263-4e50-9374-84ae3116ad39
+# ╟─d8843137-6e71-40a7-9251-3a1221ce7ce2
+# ╠═20b9a236-fe70-41f6-8084-e54b3986f99f
+# ╠═9ecdd276-8b58-42b4-9ecc-cbf392dce38a
+# ╠═a3665145-5439-47fa-99e1-5ec673d288d4
+# ╠═8b2befe5-893c-4a48-9108-7aa65ff4c505
+# ╠═39b3c278-8573-4811-8166-595d9e0f85d5
+# ╠═6f875294-604d-41a9-83cf-a8145c41357d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

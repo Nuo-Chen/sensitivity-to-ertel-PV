@@ -11,7 +11,7 @@ mf: array-like, 3d (nx, ny, None)
 ------------
 returns
 ds/dx: array-like, 3d (nx, ny, nz)"""
-function ∂x(s::Array{T,3}, dx::T, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∂x(s, dx, mf) 
     c = (s[3:end,:,:]-s[1:end-2,:,:])/2/dx
     l = (s[2,:,:]-s[1,:,:])/dx
     r = (s[end,:,:]-s[end-1,:,:])/dx 
@@ -30,7 +30,7 @@ mf: array-like, 3d (nx, ny, None)
 ------------
 returns
 ds/dy: array-like, 3d (nx, ny, nz)"""
-function ∂y(s::Array{T,3}, dy::T, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∂y(s, dy, mf) 
     c = (s[:,3:end,:]-s[:,1:end-2,:])/2/dy
     l = (s[:,2,:]-s[:,1,:])/dy
     r = (s[:,end,:]-s[:,end-1,:])/dy
@@ -49,13 +49,13 @@ mf: array-like, 3d (nx, ny, None)
 ------------
 returns
 d2s/dx2: array-like, 3d (nx, ny, nz)"""
-function ∂²x(s::Array{T,3}, dx::T, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∂²x(s, dx, mf2) 
     dx2 = dx^2
-    c = (s[:,3:end,:]+s[:,1:end-2,:] - 2*s[:,2:end-1,:])/dx2
-    l = (s[:,2,:]-s[:,1,:])/dx2
-    r = (s[:,end,:]-s[:,end-1,:])/dx2
-    ret = cat(l[:,na,:],c,r[:,na,:], dims=2)
-    ret = ret .* mf
+    c = (s[3:end,:,:]+s[1:end-2,:,:] - 2*s[2:end-1,:,:])/dx2
+    l = (s[2,:,:]-s[1,:,:])/dx2
+    r = (s[end,:,:]-s[end-1,:,:])/dx2
+    ret = cat(l[na,:,:],c,r[na,:,:], dims=1)
+    ret = ret .* mf2
 end
 
 """calculate 2nd order central finite differencing along y-axis with map factors 
@@ -69,13 +69,13 @@ mf: array-like, 3d (nx, ny, None)
 ------------
 returns
 d2s/dy2: array-like, 3d (nx, ny, nz)"""
-function ∂²y(s::Array{T,3}, dy::T, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∂²y(s, dy, mf2) 
     dy2 = dy^2
     c = (s[:,3:end,:]+s[:,1:end-2,:] - 2*s[:,2:end-1,:])/dy2
     l = (s[:,2,:]-s[:,1,:])/dy2
     r = (s[:,end,:]-s[:,end-1,:])/dy2
     ret = cat(l[:,na,:],c,r[:,na,:], dims=2)
-    ret = ret .* mf
+    ret = ret .* mf2
 end
 
 """calculate the laplacian of a scalar with map factors 
@@ -89,10 +89,10 @@ mf: array-like, 3d (nx, ny, None)
 ------------
 returns
 lap(s): array-like, 3d (nx, ny, nz)"""
-function ∇²(s, dx::T, dy::T, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∇²(s, dx, dy, mf2) 
     dx2 = dx^2
-    mf2 = mf.^2
-    ret = zero(mf)
+    # mf2 = mf.^2
+    ret = zero(mf2)
     ret[2:end-1,2:end-1,:] = (s[2:end-1,3:end,:]+s[2:end-1,1:end-2,:]+s[3:end,2:end-1,:]+s[1:end-2,2:end-1,:]- 4*s[2:end-1,2:end-1,:])/dx2
     ret = ret .* mf2
 end
@@ -108,7 +108,7 @@ mf: array-like, 3d (nx, ny, None)
 ------------
 returns
 dsdx, dvdy: a tuple of 2 arrays, 3d (nx, ny, nz)"""
-function ∇(s::Array{T,3}, dx::T, dy::T, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∇(s, dx, dy, mf) 
     ret = (∂x(s, dx, mf), ∂y(s,dy,mf))
 end
 
@@ -123,7 +123,7 @@ mf: array-like, 3d (nx, ny, None)
 ------------
 returns
 div(v) : array-like, 3d (nx, ny, nz)"""
-function ∇div(va::Array{T,3}, vb::Array{T,3}, dx::T, dy::T, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∇div(va, vb, dx, dy, mf) 
     dudx = ∂x(va, dx, mf)
     dvdy = ∂y(vb, dy, mf)
     return dudx + dvdy
@@ -140,15 +140,15 @@ mf: array-like, 3d (nx, ny, None)
 ------------
 returns
 d2s/dxdy: array-like, 3d (nx, ny, nz)"""
-function ∂xy(s::Array{T,3}, dx::T, dy::T, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∂xy(s, dx, dy, mf) 
     ret = ∂y(∂x(s, dx, mf), dy, mf)
 end
 
-function ∂xπ(s::Array{T,3}, dx::T, h::Array{T,3}, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∂xπ(s, dx, h, mf) 
     ret = ∂π(∂x(s, dx, mf), h)
 end
 
-function ∂yπ(s::Array{T,3}, dy::T, h::Array{T,3}, mf::Array{T,3}) where {T<:AbstractFloat}
+function ∂yπ(s, dy, h, mf) 
     ret = ∂π(∂y(s, dy, mf), h)
 end
 
@@ -162,7 +162,7 @@ h: array-like, 3d (None, None, nz)
 ------------
 returns
 ds/dpi: array-like, 3d (nx, ny, nz)"""
-function ∂π(s::Array{T,3}, h::Array{T,3}) where {T<:AbstractFloat}
+function ∂π(s, h) 
     him1 = h[:,:,1:end-1]
     hi = h[:,:,2:end]  #?
     si = s[:,:,2:end-1]
@@ -184,7 +184,7 @@ h: array-like, 3d (None, None, nz)
 ------------
 returns
 d2s/dpi2: array-like, 3d (nx, ny, nz)"""
-function ∂²π(s::Array{T,3}, h::Array{T,3}) where {T<:AbstractFloat}
+function ∂²π(s, h) 
     him1 = h[:,:,1:end-1]
     hi = h[:,:,2:end]  #?
     si = s[:,:,2:end-1]
@@ -194,4 +194,11 @@ function ∂²π(s::Array{T,3}, h::Array{T,3}) where {T<:AbstractFloat}
     top = (s[:,:,end] - s[:,:,end-1]) ./ h[:,:,end-1].^2
     btn = (s[:,:,2] - s[:,:,1]) ./ h[:,:,1].^2 
     ret = cat(btn[:,:,na], c, top[:,:,na], dims=3)
+end
+
+function ∇f∇(s, dx, dy, mf, f)
+	sx, sy = ∇(s, dx, dy, mf)
+	fsx = f .* sx
+	fsy = f .* sy
+	ret = ∇div(fsx, fsy, dx, dy, mf)
 end
