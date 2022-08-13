@@ -1,20 +1,58 @@
-using gradient
-using Enzyme
+# using Enzyme
+using Plots
+using RegularizedLeastSquares
+using LinearOperators
 
-function ∇²(s, dx::T, dy::T, mf::Array{T,2}) where {T<:AbstractFloat}
-    dx2 = dx^2
-    mf2 = mf.^2
-    ret = zero(mf)
-    ret[2:end-1,2:end-1] = (s[2:end-1,3:end]+s[2:end-1,1:end-2]+s[3:end,2:end-1]+s[1:end-2,2:end-1]- 4*s[2:end-1,2:end-1])/dx2
-    ret = ret .* mf2
+# https://tknopp.github.io/RegularizedLeastSquares.jl/latest/gettingStarted/
+
+n = 25
+tn = 2n+1
+
+x = -n:n
+y = -n:n
+xx = x' .* ones(tn)
+yy = ones(tn)' .* y
+
+d = sqrt.(xx.^2 + yy.^2)
+
+nx = tn; ny = tn; nz=1; nxyz=tn*tn
+
+
+function logop(row, m, n, l, op, a)
+	col = ((l-1)*ny + n -1)*nx + m
+	a[col, row] = op
+	return a
 end
 
-rhs = forcing
+global ∇² = zeros(Float32, nxyz, nxyz)
+for k in 1:nz, j in 2:ny-1, i in 2:nx-1
+    tijk = ((k-1)*ny +j-1)*nx + i
+    jm1 = max(j-1,1)
+    im1 = max(i-1,1)
+    jp1 = min(j+1,ny)
+    ip1 = min(i+1,nx)
 
-function cost(rhs, x)
-    lhs = ∇²(x, 1, 1, ones(Int8, 1,100,100))
-    return sum(sqrt.(lhs - rhs).^2)
+    global ∇² = logop(tijk, i, jm1, k, 1., ∇²)
+    global ∇² = logop(tijk, im1, j, k, 1., ∇²)
+    global ∇² = logop(tijk, i, j, k, -4., ∇²)
+    global ∇² = logop(tijk, i, jp1, k, 1., ∇²)
+    global ∇² = logop(tijk, im1, j, k, 1., ∇²)
 end
 
-∂J_∂x = zero(x)
-@time autodiff(cost, Active, rhs, Duplicated(x, ∂J_∂x))
+rhs = exp.(-(d.-4).^2/2) 
+# A = LinearOperator(∇²)
+vrhs= Float32.(vec(rhs))
+
+
+reg = Regularization("L2", 0.01; shape=(nxyz))
+solver = createLinearSolver("cgnr", ∇², iterations=100, regMatrix=reg)
+
+x_approx = solve(solver,vrhs)
+ima = reshape(x_approx, tn, tn)
+
+ly = @layout [a b]
+p1 = contour(rhs, title = "ζ")
+p2 = contour(ima, title = "ψ")
+
+plot(p1, p2, layout=ly)
+plot!(size=(600,300))
