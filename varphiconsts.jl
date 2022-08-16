@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.0
+# v0.19.5
 
 using Markdown
 using InteractiveUtils
@@ -54,13 +54,9 @@ begin
 	msfm_2d = permutedims(msfm_py,[2,1])
 	f_2d = permutedims(f_py,[2,1])
 
-	nx, ny, nzz = size(ϕ);
-end
-
-# ╔═╡ 67485d25-930e-4036-a0a1-90521c57f43c
-begin 
 	m2_3d = msfm_3d .^2
-	print("other info")
+
+	nx, ny, nzz = size(ϕ);
 end
 
 # ╔═╡ 856e1504-827d-47a3-b031-cf89ec346829
@@ -72,16 +68,38 @@ begin
 	∇²ϕ̄ππ = grad.∇²(ϕ̄ππ, rdx, rdy, msfm_3d);
 	∇²ϕ̄xπ = grad.∇²(ϕ̄xπ, rdx, rdy, msfm_3d);
 	∇²ϕ̄yπ = grad.∇²(ϕ̄yπ, rdx, rdy, msfm_3d) 
-	print("constants for TϕRψ")
+	String("constants for TϕRψ")
 end
 
 # ╔═╡ befba63a-994f-4f28-8514-b88ac6d91ddb
 begin
 	ζ = grad.∇²(ψ, rdx, rdy, msfm_3d) .+ f_3d
+	ζx = grad.∂x(ζ, rdx, msfm_3d)
+	ζy = grad.∂y(ζ, rdy, msfm_3d)
+	ζxx = grad.∂²x(ζ, rdx, m2_3d)
+ 	ζyy = grad.∂²y(ζ, rdy, m2_3d)
+	∇²ζ = grad.∇²(ζ, rdx, rdy, msfm_3d)
+	ζxy = grad.∂y(grad.∂x(ζ, rdx, msfm_3d), rdy, msfm_3d)
+	
 	ψ̄xπ = grad.∂xπ(ψ, rdx, dπ_3d, msfm_3d)
 	ψ̄yπ = grad.∂yπ(ψ, rdy, dπ_3d, msfm_3d)
 	ψ̄xx = grad.∂²x(ψ, rdx, m2_3d)
 	ψ̄yy = grad.∂²y(ψ, rdy, m2_3d)
+	ψ̄xy = grad.∂y(grad.∂x(ψ, rdx, msfm_3d), rdy, msfm_3d)
+
+	∂xψ̄xπ = grad.∂x(ψ̄xπ, rdx, msfm_3d)
+	∂yψ̄xπ = grad.∂y(ψ̄xπ, rdy, msfm_3d)
+	∂yyψ̄xπ = grad.∂²y(ψ̄xπ, rdy, m2_3d)
+	∂xxψ̄xπ = grad.∂²x(ψ̄xπ, rdx, m2_3d)
+	∂xyψ̄xπ = grad.∂y(grad.∂x(ψ̄xπ, rdx, msfm_3d), rdy, msfm_3d)
+	∇²ψ̄xπ = grad.∇²(ψ̄xπ, rdx, rdy, msfm_3d)
+
+	∂xψ̄yπ = grad.∂x(ψ̄yπ, rdx, msfm_3d)
+	∂yψ̄yπ = grad.∂y(ψ̄yπ, rdy, msfm_3d)
+	∂yyψ̄yπ = grad.∂²y(ψ̄yπ, rdy, m2_3d)
+	∂xxψ̄yπ = grad.∂²x(ψ̄yπ, rdx, m2_3d)
+	∂xyψ̄yπ = grad.∂y(grad.∂x(ψ̄yπ, rdx, msfm_3d), rdy, msfm_3d)
+	∇²ψ̄yπ = grad.∇²(ψ̄yπ, rdx, rdy, msfm_3d)	
 
 	∇f∇ζ = grad.∇f∇(ζ, rdx, rdy, msfm_3d, f_3d)
 	∇f∇ψ̄xπ = grad.∇f∇(ψ̄xπ, rdx, rdy, msfm_3d, f_3d)
@@ -89,21 +107,14 @@ begin
 	# delzeta = grad.∇²(ζ, rdx, rdy, msfm_3d)
 	# maximum(filter(!isinf,(∇f∇ζ - f_3d.*delzeta)./∇f∇ζ))
 	# having doubts on ∇f∇::function
-	ζxx = grad.∂²x(ζ, rdx, m2_3d)
- 	ζyy = grad.∂²y(ζ, rdy, m2_3d)
-
-	ψ̄xπxx = grad.∂²x(ψ̄xπ, rdx, m2_3d)
-	ψ̄xπyy = grad.∂²y(ψ̄xπ, rdy, m2_3d)
-	ψ̄yπxx = grad.∂²x(ψ̄yπ, rdx, m2_3d)
-	ψ̄yπyy = grad.∂²y(ψ̄yπ, rdy, m2_3d)
 
 	fᵢ, fⱼ = grad.∇(f_3d, rdx, rdy, msfm_3d)
-	print("constants for TψRϕ")
+	String("constants for TψRϕ")
 	
 end
 
 # ╔═╡ dc939159-6cec-4fa2-b3ef-8d43a53b8bf7
-# npzwrite("varphi_inv_consts.npz", Dict("ϕ̄ππ"=>ϕ̄ππ, "ϕ̄xπ"=>ϕ̄xπ, "ϕ̄yπ"=>ϕ̄yπ, "∇²ϕ̄ππ"=>∇²ϕ̄ππ, "∇²ϕ̄xπ"=>∇²ϕ̄xπ, "∇²ϕ̄yπ"=>∇²ϕ̄yπ, "ζ"=>ζ, "ψ̄xπ"=>ψ̄xπ, "ψ̄yπ"=>ψ̄yπ, "ψ̄xx"=>ψ̄xx, "ψ̄yy"=>ψ̄yy, "∇f∇ζ"=>∇f∇ζ, "∇f∇ψ̄xπ"=>∇f∇ψ̄xπ, "∇f∇ψ̄yπ"=>∇f∇ψ̄yπ, "ζxx"=>ζxx, "ζyy"=>ζyy, "ψ̄xπxx"=>ψ̄xπxx, "ψ̄xπyy"=>ψ̄xπyy, "ψ̄yπxx"=>ψ̄yπxx, "ψ̄yπyy"=>ψ̄yπyy))
+npzwrite("varphi_inv_consts.npz", Dict("ϕ̄ππ"=>ϕ̄ππ, "ϕ̄xπ"=>ϕ̄xπ, "ϕ̄yπ"=>ϕ̄yπ, "∇²ϕ̄ππ"=>∇²ϕ̄ππ, "∇²ϕ̄xπ"=>∇²ϕ̄xπ, "∇²ϕ̄yπ"=>∇²ϕ̄yπ, "ζ"=>ζ, "ζx"=>ζx, "ζy"=>ζy, "ζxx"=>ζxx, "ζyy"=>ζyy, "ζxy"=>ζxy, "∇²ζ"=>∇²ζ, "ψ̄xπ"=>ψ̄xπ, "ψ̄yπ"=>ψ̄yπ, "ψ̄xx"=>ψ̄xx, "ψ̄yy"=>ψ̄yy, "ψ̄xy"=>ψ̄xy, "∂xψ̄xπ"=>∂xψ̄xπ, "∂yψ̄xπ"=>∂yψ̄xπ, "∂yyψ̄xπ"=>∂yyψ̄xπ, "∂xxψ̄xπ"=>∂xxψ̄xπ, "∂xyψ̄xπ"=>∂xyψ̄xπ, "∇²ψ̄xπ"=>∇²ψ̄xπ, "∂xψ̄yπ"=>∂xψ̄yπ, "∂yψ̄yπ"=>∂yψ̄yπ, "∂yyψ̄yπ"=>∂yyψ̄yπ, "∂xxψ̄yπ"=>∂xxψ̄yπ, "∂xyψ̄yπ"=>∂xyψ̄yπ, "∇²ψ̄yπ"=>∇²ψ̄yπ,"∇f∇ζ"=>∇f∇ζ, "∇f∇ψ̄xπ"=>∇f∇ψ̄xπ, "∇f∇ψ̄yπ"=>∇f∇ψ̄yπ,"fᵢ"=>fᵢ, "fⱼ"=>fⱼ, "f"=>f_3d))
 
 # ╔═╡ 76986a6f-6c90-4133-a368-3b24c2520843
 # npzwrite("general_consts.npz", Dict("fᵢ"=>fᵢ[1,:,:], "fⱼ"=>fⱼ[1,:,:], "A"=>A_py, "rdx"=>rdx, "rdx2"=>rdx^2, "rdx3"=>rdx^3, "rdy"=>rdy, "rdy2"=>rdy^2, "rdy3"=>rdy^3, "m"=>msfm_2d, "m2"=>msfm_2d.^2, "m3"=>msfm_2d.^3, "dπ"=>dπ_py, "f"=> f_2d))
@@ -401,7 +412,6 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═61b500b3-9a14-423f-9e4c-8592c855f368
 # ╠═09954537-cb30-4094-96b8-01c6d02efd44
 # ╠═945e1189-c20c-4f8a-b78d-4e9272c346fe
-# ╠═67485d25-930e-4036-a0a1-90521c57f43c
 # ╠═856e1504-827d-47a3-b031-cf89ec346829
 # ╠═befba63a-994f-4f28-8514-b88ac6d91ddb
 # ╠═dc939159-6cec-4fa2-b3ef-8d43a53b8bf7

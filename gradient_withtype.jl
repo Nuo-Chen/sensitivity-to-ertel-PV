@@ -51,11 +51,11 @@ returns
 d2s/dx2: array-like, 3d (nx, ny, nz)"""
 function ∂²x(s::Array{T,3}, dx::T, mf::Array{T,3}) where {T<:AbstractFloat}
     dx2 = dx^2
-    c = (s[:,3:end,:]+s[:,1:end-2,:] - 2*s[:,2:end-1,:])/dx2
-    l = (s[:,2,:]-s[:,1,:])/dx2
-    r = (s[:,end,:]-s[:,end-1,:])/dx2
-    ret = cat(l[:,na,:],c,r[:,na,:], dims=2)
-    ret = ret .* mf
+    c =  (s[3:end,:,:]+s[1:end-2,:,:] - 2*s[2:end-1,:,:])/dx2
+    l = (s[2,:,:]-s[1,:,:])/dx2
+    r = (s[end,:,:]-s[end-1,:,:])/dx2
+    ret = cat(l[na,:,:],c,r[na,:,:], dims=1)
+    ret = ret .* mf2
 end
 
 """calculate 2nd order central finite differencing along y-axis with map factors 

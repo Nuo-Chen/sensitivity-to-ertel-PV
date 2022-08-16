@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.0
+# v0.19.5
 
 using Markdown
 using InteractiveUtils
@@ -42,7 +42,7 @@ function logop(row, m, n, l, op, a)
 	nx = 20
 	ny = 10
 	col = ((l-1)*ny + n -1)*nx + m
-	a[col, row] = op
+	a[col, row] += op
 	return a
 end
 
@@ -174,18 +174,20 @@ begin
 	end
 	
 	∇² = zeros(Float32, nxyz, nxyz)
-	for k in 1:nz, j in 3:ny-2, i in 3:nx-2
+	for k in 1:nz, j in 1:ny, i in 1:nx
 	    tijk = ((k-1)*ny +j-1)*nx + i
 	    jm1 = max(j-1,1)
 	    im1 = max(i-1,1)
 	    jp1 = min(j+1,ny)
 	    ip1 = min(i+1,nx)
-	
-	    ∇² = logop(tijk, i, jm1, k, 1., ∇²)
-	    ∇² = logop(tijk, im1, j, k, 1., ∇²)
-	    ∇² = logop(tijk, i, j, k, -4., ∇²)
-	    ∇² = logop(tijk, i, jp1, k, 1., ∇²)
-	    ∇² = logop(tijk, im1, j, k, 1., ∇²)
+		
+		coefh = 1/dx^2 * msfm[i,j]^2
+		
+	    ∇² = logop(tijk, i, jm1, k, coefh, ∇²)
+	    ∇² = logop(tijk, im1, j, k, coefh, ∇²)
+	    ∇² = logop(tijk, i, j, k, -4*coefh, ∇²)
+	    ∇² = logop(tijk, i, jp1, k, coefh, ∇²)
+	    ∇² = logop(tijk, ip1, j, k, coefh, ∇²)
 	end
 	String("1st and 2nd order")
 end
@@ -218,8 +220,8 @@ begin
 	
 	    coef = 1/dy^3 * msfm[i,j]^3
 	    ∂³y = logop(tijk, i, jp2, k, 1/2*coef, ∂³y)
-	    ∂³y = logop(tijk, i, jm1, k, -coef, ∂³y)
-	    ∂³y = logop(tijk, i, jp1, k, coef, ∂³y)
+	    ∂³y = logop(tijk, i, jp1, k, -coef, ∂³y)
+	    ∂³y = logop(tijk, i, jm1, k, coef, ∂³y)
 	    ∂³y = logop(tijk, i, jm2, k, -1/2*coef, ∂³y)
 	
 	end
@@ -233,12 +235,12 @@ begin
 	    jp1 = min(j+1,ny)
 	
 	    coef = 1/dx/dy^2 * msfm[i,j]^3
-	    ∂³xy2 = logop(tijk, ip1, jp1, k, 1/4*coef, ∂³xy2)
-	    ∂³xy2 = logop(tijk, ip1, jm1, k, 1/4*coef, ∂³xy2)
-	    ∂³xy2 = logop(tijk, ip1, j, k, -1/2*coef, ∂³xy2)
-	    ∂³xy2 = logop(tijk, im1, jp1, k, -1/4*coef, ∂³xy2)
-	    ∂³xy2 = logop(tijk, im1, jm1, k, -1/4*coef, ∂³xy2)
-	    ∂³xy2 = logop(tijk, im1, j, k, 1/2*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, ip1, jp1, k, 1/2*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, ip1, jm1, k, 1/2*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, ip1, j, k, -coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, im1, jp1, k, -1/2*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, im1, jm1, k, -1/2*coef, ∂³xy2)
+	    ∂³xy2 = logop(tijk, im1, j, k, coef, ∂³xy2)
 	
 	end
 	
@@ -251,19 +253,141 @@ begin
 	    jp1 = min(j+1,ny)
 	
 	    coef = 1/dx^2/dy * msfm[i,j]^3
-	    ∂³x2y = logop(tijk, ip1, jp1, k, 1/4*coef, ∂³x2y)
-	    ∂³x2y = logop(tijk, im1, jp1, k, 1/4*coef, ∂³x2y)
-	    ∂³x2y = logop(tijk, i, jp1, k, -1/2*coef, ∂³x2y)
-	    ∂³x2y = logop(tijk, ip1, jm1, k, -1/4*coef, ∂³x2y)
-	    ∂³x2y = logop(tijk, im1, jm1, k, -1/4*coef, ∂³x2y)
-	    ∂³x2y = logop(tijk, i, jm1, k, 1/2*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, ip1, jp1, k, 1/2*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, im1, jp1, k, 1/2*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, i, jp1, k, -coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, ip1, jm1, k, -1/2*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, im1, jm1, k, -1/2*coef, ∂³x2y)
+	    ∂³x2y = logop(tijk, i, jm1, k, coef, ∂³x2y)
+	end
+
+	∂³xπ2  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dx * msfm[i,j]
+	    coefkp1 = 2/(h[k]*(h[k]+h[km1]))
+	    coefk = -2/h[k]/h[km1]
+	    coefkm1 = 2/(h[km1]*(h[k]+h[km1]))
+	            
+	    ∂³xπ2 = logop(tijk, ip1, j, kp1, 1/2*coefh*coefkp1, ∂³xπ2)
+	    ∂³xπ2 = logop(tijk, im1, j, kp1, -1/2*coefh*coefkp1, ∂³xπ2)
+	    ∂³xπ2 = logop(tijk, ip1, j, k, 1/2*coefh*coefk, ∂³xπ2)
+	    ∂³xπ2 = logop(tijk, im1, j, k, -1/2*coefh*coefk, ∂³xπ2)
+	    ∂³xπ2 = logop(tijk, ip1, j, km1, 1/2*coefh*coefkm1, ∂³xπ2)
+	    ∂³xπ2 = logop(tijk, im1, j, km1, -1/2*coefh*coefkm1, ∂³xπ2)
+	end
+	
+	∂³yπ2  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dy * msfm[i,j]
+	    coefkp1 = 2/(h[k]*(h[k]+h[km1]))
+	    coefk = -2/h[k]/h[km1]
+	    coefkm1 = 2/(h[km1]*(h[k]+h[km1]))
+	            
+	    ∂³yπ2 = logop(tijk, i, jp1, kp1, 1/2*coefh*coefkp1, ∂³yπ2)
+	    ∂³yπ2 = logop(tijk, i, jm1, kp1, -1/2*coefh*coefkp1, ∂³yπ2)
+	    ∂³yπ2 = logop(tijk, i, jp1, k, 1/2*coefh*coefk, ∂³yπ2)
+	    ∂³yπ2 = logop(tijk, i, jm1, k, -1/2*coefh*coefk, ∂³yπ2)
+	    ∂³yπ2 = logop(tijk, i, jp1, km1, 1/2*coefh*coefkm1, ∂³yπ2)
+	    ∂³yπ2 = logop(tijk, i, jm1, km1, -1/2*coefh*coefkm1, ∂³yπ2)
+	end
+
+	∂³x2π  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    im1 = max(i-1,1)
+	    ip1 = min(i+1,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dx^2 * msfm[i,j]^2
+	    coefkp1 = 1/(h[k]*(1+h[k]/h[km1]))
+	    coefk = 1/h[km1]-1/h[k]
+	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
+	    
+	    ∂³x2π = logop(tijk, ip1, j, kp1, coefh*coefkp1, ∂³x2π)
+		∂³x2π = logop(tijk, i, j, kp1, -2*coefh*coefkp1, ∂³x2π)
+	    ∂³x2π = logop(tijk, im1, j, kp1, coefh*coefkp1, ∂³x2π)
+	    ∂³x2π = logop(tijk, ip1, j, k, coefh*coefk, ∂³x2π)
+		∂³x2π = logop(tijk, i, j, k, -2*coefh*coefk, ∂³x2π)
+	    ∂³x2π = logop(tijk, im1, j, k, coefh*coefk, ∂³x2π)
+	    ∂³x2π = logop(tijk, ip1, j, km1, coefh*coefkm1, ∂³x2π)
+		∂³x2π = logop(tijk, i, j, km1, -2*coefh*coefkm1, ∂³x2π)
+	    ∂³x2π = logop(tijk, im1, j, km1, coefh*coefkm1, ∂³x2π)
+	end
+	
+	∂³y2π  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    jp1 = min(j+1,ny)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dy^2 * msfm[i,j]^2
+	    coefkp1 = 1/(h[k]*(1+h[k]/h[km1]))
+	    coefk = 1/h[km1]-1/h[k]
+	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
+	    
+	    ∂³y2π = logop(tijk, i, jp1, kp1, coefh*coefkp1, ∂³y2π)
+		∂³y2π = logop(tijk, i, j, kp1, -2*coefh*coefkp1, ∂³y2π)
+	    ∂³y2π = logop(tijk, i, jm1, kp1, coefh*coefkp1, ∂³y2π)
+	    ∂³y2π = logop(tijk, i, jp1, k, coefh*coefk, ∂³y2π)
+		∂³y2π = logop(tijk, i, j, k, -2*coefh*coefk, ∂³y2π)
+	    ∂³y2π = logop(tijk, i, jm1, k, coefh*coefk, ∂³y2π)
+	    ∂³y2π = logop(tijk, i, jp1, km1, coefh*coefkm1, ∂³y2π)
+		∂³y2π = logop(tijk, i, j, km1, -2*coefh*coefkm1, ∂³y2π)
+	    ∂³y2π = logop(tijk, i, jm1, km1, coefh*coefkm1, ∂³y2π)
+	end
+
+
+	∂³xyπ = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    im1 = max(i-1,1)
+	    jp1 = min(j+1,ny)
+	    ip1 = min(i+1,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	
+	    coefh = 1/dx/dy * msfm[i,j]^2
+	    coefkp1 = 1/(h[k]*(1+h[k]/h[km1]))
+	    coefk = 1/h[km1]-1/h[k]
+	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
+	    
+	    ∂³xyπ = logop(tijk, ip1, jp1, kp1, 1/4*coefh*coefkp1, ∂³xyπ)
+	    ∂³xyπ = logop(tijk, im1, jm1, kp1, 1/4*coefh*coefkp1, ∂³xyπ)
+	    ∂³xyπ = logop(tijk, im1, jp1, kp1, -1/4*coefh*coefkp1, ∂³xyπ)
+	    ∂³xyπ = logop(tijk, ip1, jm1, kp1, -1/4*coefh*coefkp1, ∂³xyπ)
+	    
+	    ∂³xyπ = logop(tijk, ip1, jp1, k, 1/4*coefh*coefk, ∂³xyπ)
+	    ∂³xyπ = logop(tijk, im1, jm1, k, 1/4*coefh*coefk, ∂³xyπ)
+	    ∂³xyπ = logop(tijk, im1, jp1, k, -1/4*coefh*coefk, ∂³xyπ)
+	    ∂³xyπ = logop(tijk, ip1, jm1, k, -1/4*coefh*coefk, ∂³xyπ)
+	    
+	    ∂³xyπ = logop(tijk, ip1, jp1, km1, 1/4*coefh*coefkm1, ∂³xyπ)
+	    ∂³xyπ = logop(tijk, im1, jm1, km1, 1/4*coefh*coefkm1, ∂³xyπ)
+	    ∂³xyπ = logop(tijk, im1, jp1, km1, -1/4*coefh*coefkm1, ∂³xyπ)
+	    ∂³xyπ = logop(tijk, ip1, jm1, km1, -1/4*coefh*coefkm1, ∂³xyπ)
 	end
 	String("3rd order")
 end
 
 # ╔═╡ d8843137-6e71-40a7-9251-3a1221ce7ce2
 begin
-	∇⁴ = zeros(Float32, nxyz, nxyz)
+	global ∇⁴ = zeros(Float32, nxyz, nxyz)
 	for k in 1:nz, j in 3:ny-2, i in 3:nx-2
 	    tijk = ((k-1)*ny +j-1)*nx + i
 	    jm1 = max(j-1,1)
@@ -276,22 +400,22 @@ begin
 	    ip2 = min(i+2,nx)
 	
 	
-	    ∇⁴ = logop(tijk, ip2, j, k, 1., ∇⁴)
-	    ∇⁴ = logop(tijk, im2, j, k, 1., ∇⁴)
-	    ∇⁴ = logop(tijk, i, jp2, k, 1., ∇⁴)
-	    ∇⁴ = logop(tijk, i, jm2, k, 1., ∇⁴)
-	    ∇⁴ = logop(tijk, ip1, j, k, -8., ∇⁴)
-	    ∇⁴ = logop(tijk, im1, j, k, -8., ∇⁴)
-	    ∇⁴ = logop(tijk, i, jp1, k, -8., ∇⁴)
-	    ∇⁴ = logop(tijk, i, jm1, k, -8., ∇⁴)
-	    ∇⁴ = logop(tijk, ip1, jp1, k, 2., ∇⁴)
-	    ∇⁴ = logop(tijk, im1, jm1, k, 2., ∇⁴)
-	    ∇⁴ = logop(tijk, ip1, jm1, k, 2., ∇⁴)
-	    ∇⁴ = logop(tijk, im1, jp1, k, 2., ∇⁴)
-	    ∇⁴ = logop(tijk, i, j, k, 20., ∇⁴)
+	    global ∇⁴ = logop(tijk, ip2, j, k, 1., ∇⁴)
+	    global ∇⁴ = logop(tijk, im2, j, k, 1., ∇⁴)
+	    global ∇⁴ = logop(tijk, i, jp2, k, 1., ∇⁴)
+	    global ∇⁴ = logop(tijk, i, jm2, k, 1., ∇⁴)
+	    global ∇⁴ = logop(tijk, ip1, j, k, -8., ∇⁴)
+	    global ∇⁴ = logop(tijk, im1, j, k, -8., ∇⁴)
+	    global ∇⁴ = logop(tijk, i, jp1, k, -8., ∇⁴)
+	    global ∇⁴ = logop(tijk, i, jm1, k, -8., ∇⁴)
+	    global ∇⁴ = logop(tijk, ip1, jp1, k, 2., ∇⁴)
+	    global ∇⁴ = logop(tijk, im1, jm1, k, 2., ∇⁴)
+	    global ∇⁴ = logop(tijk, ip1, jm1, k, 2., ∇⁴)
+	    global ∇⁴ = logop(tijk, im1, jp1, k, 2., ∇⁴)
+	    global ∇⁴ = logop(tijk, i, j, k, 20., ∇⁴)
 	end
 	
-	∂⁴x3π  = zeros(Float32, nxyz, nxyz)
+	global ∂⁴x3π  = zeros(Float32, nxyz, nxyz)
 	for k in 1:nz-1, j in 1:ny, i in 1:nx
 	    tijk = ((k-1)*ny +j-1)*nx + i
 	    im1 = max(i-1,1)
@@ -306,21 +430,21 @@ begin
 	    coefk = 1/h[km1]-1/h[k]
 	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
 	    
-	    ∂⁴x3π = logop(tijk, ip2, j, kp1, 1/2*coefh*coefkp1, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, ip1, j, kp1, -coefh*coefkp1, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, im1, j, kp1, coefh*coefkp1, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, im2, j, kp1, -1/2*coefh*coefkp1, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, ip2, j, k, 1/2*coefh*coefk, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, ip1, j, k, -coefh*coefk, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, im1, j, k, coefh*coefk, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, im2, j, k, -1/2*coefh*coefk, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, ip2, j, km1, 1/2*coefh*coefkm1, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, ip1, j, km1, -coefh*coefkm1, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, im1, j, km1, coefh*coefkm1, ∂⁴x3π)
-	    ∂⁴x3π = logop(tijk, im2, j, km1, -1/2*coefh*coefkm1, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, ip2, j, kp1, 1/2*coefh*coefkp1, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, ip1, j, kp1, -coefh*coefkp1, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, im1, j, kp1, coefh*coefkp1, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, im2, j, kp1, -1/2*coefh*coefkp1, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, ip2, j, k, 1/2*coefh*coefk, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, ip1, j, k, -coefh*coefk, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, im1, j, k, coefh*coefk, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, im2, j, k, -1/2*coefh*coefk, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, ip2, j, km1, 1/2*coefh*coefkm1, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, ip1, j, km1, -coefh*coefkm1, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, im1, j, km1, coefh*coefkm1, ∂⁴x3π)
+	    global ∂⁴x3π = logop(tijk, im2, j, km1, -1/2*coefh*coefkm1, ∂⁴x3π)
 	end
 	
-	∂⁴y3π  = zeros(Float32, nxyz, nxyz)
+	global ∂⁴y3π  = zeros(Float32, nxyz, nxyz)
 	for k in 1:nz-1, j in 1:ny, i in 1:nx
 	    tijk = ((k-1)*ny +j-1)*nx + i
 	    jm1 = max(j-1,1)
@@ -335,21 +459,21 @@ begin
 	    coefk = 1/h[km1]-1/h[k]
 	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
 	    
-	    ∂⁴y3π = logop(tijk, i, jp2, kp1, 1/2*coefh*coefkp1, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jp1, kp1, -coefh*coefkp1, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jm1, kp1, coefh*coefkp1, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jm2, kp1, -1/2*coefh*coefkp1, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jp2, k, 1/2*coefh*coefk, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jp1, k, -coefh*coefk, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jm1, k, coefh*coefk, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jm2, k, -1/2*coefh*coefk, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jp2, km1, 1/2*coefh*coefkm1, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jp1, km1, -coefh*coefkm1, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jm1, km1, coefh*coefkm1, ∂⁴y3π)
-	    ∂⁴y3π = logop(tijk, i, jm2, km1, -1/2*coefh*coefkm1, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jp2, kp1, 1/2*coefh*coefkp1, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jp1, kp1, -coefh*coefkp1, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jm1, kp1, coefh*coefkp1, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jm2, kp1, -1/2*coefh*coefkp1, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jp2, k, 1/2*coefh*coefk, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jp1, k, -coefh*coefk, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jm1, k, coefh*coefk, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jm2, k, -1/2*coefh*coefk, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jp2, km1, 1/2*coefh*coefkm1, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jp1, km1, -coefh*coefkm1, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jm1, km1, coefh*coefkm1, ∂⁴y3π)
+	    global ∂⁴y3π = logop(tijk, i, jm2, km1, -1/2*coefh*coefkm1, ∂⁴y3π)
 	end
 	
-	∂⁴x2π2  = zeros(Float32, nxyz, nxyz)
+	global ∂⁴x2π2  = zeros(Float32, nxyz, nxyz)
 	for k in 1:nz-1, j in 1:ny, i in 1:nx
 	    tijk = ((k-1)*ny +j-1)*nx + i
 	    im1 = max(i-1,1)
@@ -362,18 +486,18 @@ begin
 	    coefk = -2/h[k]/h[km1]
 	    coefkm1 = 2/(h[km1]*(h[k]+h[km1]))
 	            
-	    ∂⁴x2π2 = logop(tijk, ip1, j, kp1, coefh*coefkp1, ∂⁴x2π2)
-	    ∂⁴x2π2 = logop(tijk, i, j, kp1, -2*coefh*coefkp1, ∂⁴x2π2)
-	    ∂⁴x2π2 = logop(tijk, im1, j, kp1, coefh*coefkp1, ∂⁴x2π2)
-	    ∂⁴x2π2 = logop(tijk, ip1, j, k, coefh*coefk, ∂⁴x2π2)
-	    ∂⁴x2π2 = logop(tijk, i, j, k, -2*coefh*coefk, ∂⁴x2π2)
-	    ∂⁴x2π2 = logop(tijk, im1, j, k, coefh*coefk, ∂⁴x2π2)
-	    ∂⁴x2π2 = logop(tijk, ip1, j, km1, coefh*coefkm1, ∂⁴x2π2)
-	    ∂⁴x2π2 = logop(tijk, i, j, km1, -2*coefh*coefkm1, ∂⁴x2π2)
-	    ∂⁴x2π2 = logop(tijk, im1, j, km1, coefh*coefkm1, ∂⁴x2π2)
+	    global ∂⁴x2π2 = logop(tijk, ip1, j, kp1, coefh*coefkp1, ∂⁴x2π2)
+	    global ∂⁴x2π2 = logop(tijk, i, j, kp1, -2*coefh*coefkp1, ∂⁴x2π2)
+	    global ∂⁴x2π2 = logop(tijk, im1, j, kp1, coefh*coefkp1, ∂⁴x2π2)
+	    global ∂⁴x2π2 = logop(tijk, ip1, j, k, coefh*coefk, ∂⁴x2π2)
+	    global ∂⁴x2π2 = logop(tijk, i, j, k, -2*coefh*coefk, ∂⁴x2π2)
+	    global ∂⁴x2π2 = logop(tijk, im1, j, k, coefh*coefk, ∂⁴x2π2)
+	    global ∂⁴x2π2 = logop(tijk, ip1, j, km1, coefh*coefkm1, ∂⁴x2π2)
+	    global ∂⁴x2π2 = logop(tijk, i, j, km1, -2*coefh*coefkm1, ∂⁴x2π2)
+	    global ∂⁴x2π2 = logop(tijk, im1, j, km1, coefh*coefkm1, ∂⁴x2π2)
 	end
 	
-	∂⁴y2π2  = zeros(Float32, nxyz, nxyz)
+	global ∂⁴y2π2  = zeros(Float32, nxyz, nxyz)
 	for k in 1:nz-1, j in 1:ny, i in 1:nx
 	    tijk = ((k-1)*ny +j-1)*nx + i
 	    jm1 = max(j-1,1)
@@ -386,19 +510,19 @@ begin
 	    coefk = -2/h[k]/h[km1]
 	    coefkm1 = 2/(h[km1]*(h[k]+h[km1]))
 	            
-	    ∂⁴y2π2 = logop(tijk, i, jp1, kp1, coefh*coefkp1, ∂⁴y2π2)
-	    ∂⁴y2π2 = logop(tijk, i, j, kp1, -2*coefh*coefkp1, ∂⁴y2π2)
-	    ∂⁴y2π2 = logop(tijk, i, jm1, kp1, coefh*coefkp1, ∂⁴y2π2)
-	    ∂⁴y2π2 = logop(tijk, i, jp1, k, coefh*coefk, ∂⁴y2π2)
-	    ∂⁴y2π2 = logop(tijk, i, j, k, -2*coefh*coefk, ∂⁴y2π2)
-	    ∂⁴y2π2 = logop(tijk, i, jm1, k, coefh*coefk, ∂⁴y2π2)
-	    ∂⁴y2π2 = logop(tijk, i, jp1, km1, coefh*coefkm1, ∂⁴y2π2)
-	    ∂⁴y2π2 = logop(tijk, i, j, km1, -2*coefh*coefkm1, ∂⁴y2π2)
-	    ∂⁴y2π2 = logop(tijk, i, jm1, km1, coefh*coefkm1, ∂⁴y2π2)
+	    global ∂⁴y2π2 = logop(tijk, i, jp1, kp1, coefh*coefkp1, ∂⁴y2π2)
+	    global ∂⁴y2π2 = logop(tijk, i, j, kp1, -2*coefh*coefkp1, ∂⁴y2π2)
+	    global ∂⁴y2π2 = logop(tijk, i, jm1, kp1, coefh*coefkp1, ∂⁴y2π2)
+	    global ∂⁴y2π2 = logop(tijk, i, jp1, k, coefh*coefk, ∂⁴y2π2)
+	    global ∂⁴y2π2 = logop(tijk, i, j, k, -2*coefh*coefk, ∂⁴y2π2)
+	    global ∂⁴y2π2 = logop(tijk, i, jm1, k, coefh*coefk, ∂⁴y2π2)
+	    global ∂⁴y2π2 = logop(tijk, i, jp1, km1, coefh*coefkm1, ∂⁴y2π2)
+	    global ∂⁴y2π2 = logop(tijk, i, j, km1, -2*coefh*coefkm1, ∂⁴y2π2)
+	    global ∂⁴y2π2 = logop(tijk, i, jm1, km1, coefh*coefkm1, ∂⁴y2π2)
 	end
 	
 	
-	∂⁴xy2π = zeros(Float32, nxyz, nxyz)
+	global ∂⁴xy2π = zeros(Float32, nxyz, nxyz)
 	for k in 1:nz-1, j in 1:ny, i in 1:nx
 	    tijk = ((k-1)*ny +j-1)*nx + i
 	    jm1 = max(j-1,1)
@@ -413,29 +537,29 @@ begin
 	    coefk = 1/h[km1]-1/h[k]
 	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
 	    
-	    ∂⁴xy2π = logop(tijk, ip1, jp1, kp1, 1/4*coefh*coefkp1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, ip1, jm1, kp1, 1/4*coefh*coefkp1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, ip1, j, kp1, -1/2*coefh*coefkp1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, im1, jp1, kp1, -1/4*coefh*coefkp1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, im1, jm1, kp1, -1/4*coefh*coefkp1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, im1, j, kp1, 1/2*coefh*coefkp1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, ip1, jp1, kp1, 1/2*coefh*coefkp1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, ip1, jm1, kp1, 1/2*coefh*coefkp1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, ip1, j, kp1, -coefh*coefkp1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, im1, jp1, kp1, -1/2*coefh*coefkp1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, im1, jm1, kp1, -1/2*coefh*coefkp1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, im1, j, kp1, coefh*coefkp1, ∂⁴xy2π)
 	    
-	    ∂⁴xy2π = logop(tijk, ip1, jp1, k, 1/4*coefh*coefk, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, ip1, jm1, k, 1/4*coefh*coefk, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, ip1, j, k, -1/2*coefh*coefk, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, im1, jp1, k, -1/4*coefh*coefk, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, im1, jm1, k, -1/4*coefh*coefk, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, im1, j, k, 1/2*coefh*coefk, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, ip1, jp1, k, 1/2*coefh*coefk, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, ip1, jm1, k, 1/2*coefh*coefk, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, ip1, j, k, -coefh*coefk, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, im1, jp1, k, -1/2*coefh*coefk, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, im1, jm1, k, -1/2*coefh*coefk, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, im1, j, k, coefh*coefk, ∂⁴xy2π)
 	    
-	    ∂⁴xy2π = logop(tijk, ip1, jp1, km1, 1/4*coefh*coefkm1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, ip1, jm1, km1, 1/4*coefh*coefkm1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, ip1, j, km1, -1/2*coefh*coefkm1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, im1, jp1, km1, -1/4*coefh*coefkm1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, im1, jm1, km1, -1/4*coefh*coefkm1, ∂⁴xy2π)
-	    ∂⁴xy2π = logop(tijk, im1, j, km1, 1/2*coefh*coefkm1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, ip1, jp1, km1, 1/2*coefh*coefkm1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, ip1, jm1, km1, 1/2*coefh*coefkm1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, ip1, j, km1, -coefh*coefkm1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, im1, jp1, km1, -1/2*coefh*coefkm1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, im1, jm1, km1, -1/2*coefh*coefkm1, ∂⁴xy2π)
+	    global ∂⁴xy2π = logop(tijk, im1, j, km1, coefh*coefkm1, ∂⁴xy2π)
 	end
 	
-	∂⁴x2yπ = zeros(Float32, nxyz, nxyz)
+	global ∂⁴x2yπ = zeros(Float32, nxyz, nxyz)
 	for k in 1:nz-1, j in 1:ny, i in 1:nx
 	    tijk = ((k-1)*ny +j-1)*nx + i
 	    jm1 = max(j-1,1)
@@ -450,28 +574,97 @@ begin
 	    coefk = 1/h[km1]-1/h[k]
 	    coefkm1 = -h[k]/(h[km1]^2+h[k]*h[km1])
 	    
-	    ∂⁴x2yπ = logop(tijk, ip1, jp1,  kp1, 1/4*coefh*coefkp1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, im1, jp1, kp1, 1/4*coefh*coefkp1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, i, jp1, kp1, -1/2*coefh*coefkp1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, ip1, jm1, kp1, -1/4*coefh*coefkp1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, im1, jm1, kp1, -1/4*coefh*coefkp1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, i, jm1, kp1, 1/2*coefh*coefkp1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, ip1, jp1,  kp1, 1/2*coefh*coefkp1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, im1, jp1, kp1, 1/2*coefh*coefkp1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, i, jp1, kp1, -coefh*coefkp1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, ip1, jm1, kp1, -1/2*coefh*coefkp1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, im1, jm1, kp1, -1/2*coefh*coefkp1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, i, jm1, kp1, coefh*coefkp1, ∂⁴x2yπ)
 	    
-	    ∂⁴x2yπ = logop(tijk, ip1, jp1,  k, 1/4*coefh*coefk, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, im1, jp1, k, 1/4*coefh*coefk, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, i, jp1, k, -1/2*coefh*coefk, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, ip1, jm1, k, -1/4*coefh*coefk, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, im1, jm1, k, -1/4*coefh*coefk, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, i, jm1, k, 1/2*coefh*coefk, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, ip1, jp1,  k, 1/2*coefh*coefk, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, im1, jp1, k, 1/2*coefh*coefk, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, i, jp1, k, -coefh*coefk, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, ip1, jm1, k, -1/2*coefh*coefk, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, im1, jm1, k, -1/2*coefh*coefk, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, i, jm1, k, coefh*coefk, ∂⁴x2yπ)
 	    
 	    
-	    ∂⁴x2yπ = logop(tijk, ip1, jp1, km1, 1/4*coefh*coefkm1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, im1, jp1, km1, 1/4*coefh*coefkm1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, i, jp1, km1, -1/2*coefh*coefkm1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, ip1, jm1, km1, -1/4*coefh*coefkm1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, im1, jm1, km1, -1/4*coefh*coefkm1, ∂⁴x2yπ)
-	    ∂⁴x2yπ = logop(tijk, i, jm1, km1, 1/2*coefh*coefkm1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, ip1, jp1, km1, 1/2*coefh*coefkm1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, im1, jp1, km1, 1/2*coefh*coefkm1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, i, jp1, km1, -coefh*coefkm1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, ip1, jm1, km1, -1/2*coefh*coefkm1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, im1, jm1, km1, -1/2*coefh*coefkm1, ∂⁴x2yπ)
+	    global ∂⁴x2yπ = logop(tijk, i, jm1, km1, coefh*coefkm1, ∂⁴x2yπ)
 	end
+
+	global ∇²∂²π2  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    im1 = max(i-1,1)
+	    jp1 = min(j+1,ny)
+	    ip1 = min(i+1,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dx/dy * msfm[i,j]^2
+	    coefkp1 = 2/(h[k]*(h[k]+h[km1]))
+	    coefk = -2/h[k]/h[km1]
+	    coefkm1 = 2/(h[km1]*(h[k]+h[km1]))
+	            
+	    global ∇²∂²π2 = logop(tijk, i, jm1, kp1, coefh*coefkp1, ∇²∂²π2)
+	    global ∇²∂²π2 = logop(tijk, im1, j, kp1, coefh*coefkp1, ∇²∂²π2)
+		global ∇²∂²π2 = logop(tijk, i, j, kp1, -4*coefh*coefkp1, ∇²∂²π2)
+	    global ∇²∂²π2 = logop(tijk, i, jp1, kp1, coefh*coefkp1, ∇²∂²π2)
+		global ∇²∂²π2 = logop(tijk, ip1, j, kp1, coefh*coefkp1, ∇²∂²π2)
+		
+	    global ∇²∂²π2 = logop(tijk, i, jm1, k, coefh*coefk, ∇²∂²π2)
+	    global ∇²∂²π2 = logop(tijk, im1, j, k, coefh*coefk, ∇²∂²π2)
+		global ∇²∂²π2 = logop(tijk, i, j, k, -4*coefh*coefk, ∇²∂²π2)
+	    global ∇²∂²π2 = logop(tijk, i, jp1, k, coefh*coefk, ∇²∂²π2)
+		global ∇²∂²π2 = logop(tijk, ip1, j, k, coefh*coefk, ∇²∂²π2)
+		
+	    global ∇²∂²π2 = logop(tijk, i, jm1, km1, coefh*coefkm1, ∇²∂²π2)
+	    global ∇²∂²π2 = logop(tijk, im1, j, km1, coefh*coefkm1, ∇²∂²π2)
+		global ∇²∂²π2 = logop(tijk, i, j, km1, -4*coefh*coefkm1, ∇²∂²π2)
+	    global ∇²∂²π2 = logop(tijk, i, jp1, km1, coefh*coefkm1, ∇²∂²π2)
+		global ∇²∂²π2 = logop(tijk, ip1, j, km1, coefh*coefkm1, ∇²∂²π2)
+	end
+
+	∇²∂²xπ  = ∇²*∂²xπ
+	∇²∂²yπ  = ∇²*∂²yπ
+
+	global ∂⁴xyπ2  = zeros(Float32, nxyz, nxyz)
+	for k in 1:nz-1, j in 1:ny, i in 1:nx
+	    tijk = ((k-1)*ny +j-1)*nx + i
+	    jm1 = max(j-1,1)
+	    im1 = max(i-1,1)
+	    jp1 = min(j+1,ny)
+	    ip1 = min(i+1,nx)
+	    km1 = max(k-1,1)
+	    kp1 = min(k+1,nz)
+	    
+	    coefh = 1/dx/dy * msfm[i,j]^2
+	    coefkp1 = 2/(h[k]*(h[k]+h[km1]))
+	    coefk = -2/h[k]/h[km1]
+	    coefkm1 = 2/(h[km1]*(h[k]+h[km1]))
+	            
+	    global ∂⁴xyπ2 = logop(tijk, ip1, jp1, kp1, 1/4*coefh*coefkp1, ∂⁴xyπ2)
+	    global ∂⁴xyπ2 = logop(tijk, im1, jm1, kp1, 1/4*coefh*coefkp1, ∂⁴xyπ2)
+		global ∂⁴xyπ2 = logop(tijk, im1, jp1, kp1, -1/4*coefh*coefkp1, ∂⁴xyπ2)
+		global ∂⁴xyπ2 = logop(tijk, ip1, jm1, kp1, -1/4*coefh*coefkp1, ∂⁴xyπ2)
+		
+	    global ∂⁴xyπ2 = logop(tijk, ip1, jp1, k, 1/4*coefh*coefk, ∂⁴xyπ2)
+	    global ∂⁴xyπ2 = logop(tijk, im1, jm1, k, 1/4*coefh*coefk, ∂⁴xyπ2)
+		global ∂⁴xyπ2 = logop(tijk, im1, jp1, k, -1/4*coefh*coefk, ∂⁴xyπ2)
+		global ∂⁴xyπ2 = logop(tijk, ip1, jm1, k, -1/4*coefh*coefk, ∂⁴xyπ2)
+		
+	    global ∂⁴xyπ2 = logop(tijk, ip1, jp1, km1, 1/4*coefh*coefkm1, ∂⁴xyπ2)
+	    global ∂⁴xyπ2 = logop(tijk, im1, jm1, km1, 1/4*coefh*coefkm1, ∂⁴xyπ2)
+		global ∂⁴xyπ2 = logop(tijk, im1, jp1, km1, -1/4*coefh*coefkm1, ∂⁴xyπ2)
+		global ∂⁴xyπ2 = logop(tijk, ip1, jm1, km1, -1/4*coefh*coefkm1, ∂⁴xyπ2)
+	end
+	
 	String("4th order")
 end
 
@@ -498,6 +691,7 @@ begin
 	    f∇²[:,i] = vec(f3d).*∇²[:,i]
 	end
 	f∇²∂²π = f∇²*∂²π
+	∇²∂²π = ∇²*∂²π
 	f∇²∂²xπ = f∇²*∂²xπ
 	f∇²∂²yπ = f∇²*∂²yπ
 	
@@ -509,46 +703,50 @@ begin
 end
 
 # ╔═╡ 9ecdd276-8b58-42b4-9ecc-cbf392dce38a
-begin
-	xx = repeat(collect(Int32, 1:nx)/nx, outer=(1,ny))
-	yy = repeat(transpose(collect(Int32, 1:ny)/ny), outer=(nx,1))
-	dst = sqrt.((xx.-0.55).^2 + (yy.-0.55).^2)
-	gauss = repeat(exp.(-(dst.^2)/2), outer=(1,1,nz))
-	for i in 1:nx, j in 1:ny
-		gauss[i,j,:] .*= sin.(collect(1:nz))
-	end
-	supressout1 = 0
-end
+# begin
+# 	xx = repeat(collect(Int32, 1:nx)/nx, outer=(1,ny))
+# 	yy = repeat(transpose(collect(Int32, 1:ny)/ny), outer=(nx,1))
+# 	dst = sqrt.((xx.-0.55).^2 + (yy.-0.55).^2)
+# 	gauss = repeat(exp.(-(dst.^2)/2), outer=(1,1,nz))
+# 	for i in 1:nx, j in 1:ny
+# 		gauss[i,j,:] .*= sin.(collect(1:nz))
+# 	end
+# 	supressout1 = 0
+# end
 
 # ╔═╡ a3665145-5439-47fa-99e1-5ec673d288d4
-begin
-	# ∇²gauss = reshape(∇²*vec(gauss), (nx, ny,nz))
-	# ∇⁴gauss = reshape(∇⁴*vec(gauss), (nx, ny,nz))
-	# gaussₖ = reshape(∂π*vec(gauss), (nx, ny,nz))
-	# gaussₖₖ = reshape(∂²π*vec(gauss), (nx, ny,nz))
-	# dxyyπgauss = reshape(∂³x2y* ∂π*vec(gauss), (nx, ny,nz)) #∂π
-	d∇f∇ππgauss = reshape(∇f∇∂²π*vec(gauss), (nx, ny,nz))
-	# dxxyygauss = reshape((∂²x+∂²y)*vec(gauss), (nx, ny,nz))
-
-	supressout2 = 0
-end
+# begin
+# 	∇²∂²xπgauss_v1 = reshape(∇²∂²xπ_v1*vec(gauss), (nx, ny,nz))
+# 	∇²∂²xπgauss_v2 = reshape(∇²∂²xπ_v2*vec(gauss), (nx, ny,nz))
+# #∂⁴, ∂³, ∂², ∂, π
+# 	supressout2 = 0
+# end
 
 
 # ╔═╡ 8b2befe5-893c-4a48-9108-7aa65ff4c505
-#heatmap(∇⁴gauss[:,:,3])
-#heatmap((∇⁴-∇²*∇²)[1:100,1:100])
-#heatmap(gaussₖₖ[1,:,:])
-# heatmap((∂y*∂y)[1:500,1:500])
-# heatmap((dyπgauss)[7,:,:])
-# heatmap((d2yπgauss)[7,:,:])
-heatmap((d∇f∇ππgauss)[:,:,5])
-# heatmap((d4xyyπgauss)[:,4,:])
+# begin
+# 	l1 = @layout [a b;c d; e f]
+# 	p3 = heatmap(∇²∂²xπgauss_v1[:,:,5].*1e4, clims=(-100,100))
+# 	p4 = heatmap(∇²∂²xπgauss_v2[:,:,5].*1e4, clims=(-100,100))
 
-# ╔═╡ 39b3c278-8573-4811-8166-595d9e0f85d5
-heatmap((∇f∇∂²yπ)[1:250,1:250]) 
+# 	p5 = heatmap(∇²∂²xπgauss_v1[:,5,:].*1e4, clims=(-300,300))
+# 	p6 = heatmap(∇²∂²xπgauss_v2[:,5,:].*1e4, clims=(-300,300))
+
+# 	p7 = heatmap(∇²∂²xπgauss_v1[5,:,:].*1e4)
+# 	p8 = heatmap(∇²∂²xπgauss_v2[5,:,:].*1e4)
+	
+# 	plot(p3, p4,p5, p6,p7, p8, layout = l1)
+# 	plot!(size=(1000,1200))
+# end
 
 # ╔═╡ 6f875294-604d-41a9-83cf-a8145c41357d
-heatmap((∂⁴x2yπ)[3500:4000,3500:4000]) 
+# begin
+# 	l = @layout [a b]
+# 	p1 = heatmap(∇²∂²xπ_v1[3000:3400,3000:3400])
+# 	p2 = heatmap(∇²∂²xπ_v2[3000:3400,3000:3400])
+# 	plot(p1, p2, layout = l)
+# 	plot!(size=(1000,400))
+# end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1525,14 +1723,13 @@ version = "0.9.1+5"
 # ╠═9c29bb0c-d7b1-11ec-21a2-93b5dc43f895
 # ╠═e544c557-4706-43bc-ae1b-6b036a0a312e
 # ╠═b741ba5b-57f5-41c6-866d-06c8b64c6b6a
-# ╟─fadea17c-9edf-4af2-8ad8-522e6c746659
-# ╟─7bc9072a-a263-4e50-9374-84ae3116ad39
-# ╟─d8843137-6e71-40a7-9251-3a1221ce7ce2
+# ╠═fadea17c-9edf-4af2-8ad8-522e6c746659
+# ╠═7bc9072a-a263-4e50-9374-84ae3116ad39
+# ╠═d8843137-6e71-40a7-9251-3a1221ce7ce2
 # ╠═20b9a236-fe70-41f6-8084-e54b3986f99f
 # ╠═9ecdd276-8b58-42b4-9ecc-cbf392dce38a
 # ╠═a3665145-5439-47fa-99e1-5ec673d288d4
 # ╠═8b2befe5-893c-4a48-9108-7aa65ff4c505
-# ╠═39b3c278-8573-4811-8166-595d9e0f85d5
 # ╠═6f875294-604d-41a9-83cf-a8145c41357d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

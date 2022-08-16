@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.0
+# v0.19.5
 
 using Markdown
 using InteractiveUtils
@@ -62,6 +62,8 @@ begin
 	
 	msfm_2d = permutedims(msfm_py,[2,1])
 	f_2d = permutedims(f_py,[2,1])
+	
+	m2_3d = msfm_3d .^2
 
 	nx, ny, nzz = size(ϕ);
 end
@@ -78,17 +80,39 @@ begin
 	∇²ϕ̄ππ = grad.∇²(ϕ̄ππ, rdx, rdy, msfm_3d);
 	∇²ϕ̄xπ = grad.∇²(ϕ̄xπ, rdx, rdy, msfm_3d);
 	∇²ϕ̄yπ = grad.∇²(ϕ̄yπ, rdx, rdy, msfm_3d) 
-	print("constants for TϕRψ")
+	String("constants for TϕRψ")
 end
 
 # ╔═╡ befba63a-994f-4f28-8514-b88ac6d91ddb
 begin
-	m2_3d = msfm_3d.^2
+
 	ζ = grad.∇²(ψ5, rdx, rdy, msfm_3d) .+ f_3d
+	ζx = grad.∂x(ζ, rdx, msfm_3d)
+	ζy = grad.∂y(ζ, rdy, msfm_3d)
+	ζxx = grad.∂²x(ζ, rdx, m2_3d)
+ 	ζyy = grad.∂²y(ζ, rdy, m2_3d)
+	∇²ζ = grad.∇²(ζ, rdx, rdy, msfm_3d)
+	ζxy = grad.∂y(grad.∂x(ζ, rdx, msfm_3d), rdy, msfm_3d)
+	
 	ψ̄xπ = grad.∂xπ(ψ5, rdx, dπ_3d, msfm_3d)
 	ψ̄yπ = grad.∂yπ(ψ5, rdy, dπ_3d, msfm_3d)
 	ψ̄xx = grad.∂²x(ψ5, rdx, m2_3d)
 	ψ̄yy = grad.∂²y(ψ5, rdy, m2_3d)
+	ψ̄xy = grad.∂y(grad.∂x(ψ5, rdx, msfm_3d), rdy, msfm_3d)
+
+	∂xψ̄xπ = grad.∂x(ψ̄xπ, rdx, msfm_3d)
+	∂yψ̄xπ = grad.∂y(ψ̄xπ, rdy, msfm_3d)
+	∂yyψ̄xπ = grad.∂²y(ψ̄xπ, rdy, m2_3d)
+	∂xxψ̄xπ = grad.∂²x(ψ̄xπ, rdx, m2_3d)
+	∂xyψ̄xπ = grad.∂y(grad.∂x(ψ̄xπ, rdx, msfm_3d), rdy, msfm_3d)
+	∇²ψ̄xπ = grad.∇²(ψ̄xπ, rdx, rdy, msfm_3d)
+
+	∂xψ̄yπ = grad.∂x(ψ̄yπ, rdx, msfm_3d)
+	∂yψ̄yπ = grad.∂y(ψ̄yπ, rdy, msfm_3d)
+	∂yyψ̄yπ = grad.∂²y(ψ̄yπ, rdy, m2_3d)
+	∂xxψ̄yπ = grad.∂²x(ψ̄yπ, rdx, m2_3d)
+	∂xyψ̄yπ = grad.∂y(grad.∂x(ψ̄yπ, rdx, msfm_3d), rdy, msfm_3d)
+	∇²ψ̄yπ = grad.∇²(ψ̄yπ, rdx, rdy, msfm_3d)	
 
 	∇f∇ζ = grad.∇f∇(ζ, rdx, rdy, msfm_3d, f_3d)
 	∇f∇ψ̄xπ = grad.∇f∇(ψ̄xπ, rdx, rdy, msfm_3d, f_3d)
@@ -96,21 +120,14 @@ begin
 	# delzeta = grad.∇²(ζ, rdx, rdy, msfm_3d)
 	# maximum(filter(!isinf,(∇f∇ζ - f_3d.*delzeta)./∇f∇ζ))
 	# having doubts on ∇f∇::function
-	ζxx = grad.∂²x(ζ, rdx, m2_3d)
- 	ζyy = grad.∂²y(ζ, rdy, m2_3d)
-
-	ψ̄xπxx = grad.∂²x(ψ̄xπ, rdx, m2_3d)
-	ψ̄xπyy = grad.∂²y(ψ̄xπ, rdy, m2_3d)
-	ψ̄yπxx = grad.∂²x(ψ̄yπ, rdx, m2_3d)
-	ψ̄yπyy = grad.∂²y(ψ̄yπ, rdy, m2_3d)
 
 	fᵢ, fⱼ = grad.∇(f_3d, rdx, rdy, msfm_3d)
-	print("constants for TψRϕ")
+	String("constants for TψRϕ")
 	
 end
 
 # ╔═╡ 68ccb535-595e-4309-bda1-cea3df0cc9d2
-size(ϕ̄ππ)
+size(f_3d)
 
 # ╔═╡ 1d39f3e0-3b9b-402e-8cec-7c6cb4bd7b3b
 begin
@@ -144,10 +161,40 @@ begin
 	n∇²ϕ̄yπ[:,:,1] = n∇²ϕ̄yπ[:,:,2]
 	n∇²ϕ̄yπ[:,:,end] = n∇²ϕ̄yπ[:,:,end-1]
 	
-	nζ  = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nζ = Array{Float64, 3}(undef, nx, ny, nz+2)
 	nζ[:,:,2:end-1] = ζ 
 	nζ[:,:,1] = nζ[:,:,2]
 	nζ[:,:,end] = nζ[:,:,end-1]
+
+	nζx = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nζx[:,:,2:end-1] = ζx 
+	nζx[:,:,1] = nζx[:,:,2]
+	nζx[:,:,end] = nζx[:,:,end-1]
+	
+	nζy = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nζy[:,:,2:end-1] = ζy 
+	nζy[:,:,1] = nζy[:,:,2]
+	nζy[:,:,end] = nζy[:,:,end-1]
+	
+	nζxx   = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nζxx[:,:,2:end-1] = ζxx
+	nζxx[:,:,1] = nζxx[:,:,2]
+	nζxx[:,:,end] = nζxx[:,:,end-1]
+	
+	nζyy   = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nζyy[:,:,2:end-1] = ζyy
+	nζyy[:,:,1] = nζyy[:,:,2]
+	nζyy[:,:,end] = nζyy[:,:,end-1]
+	
+	n∇²ζ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∇²ζ[:,:,2:end-1] = ∇²ζ 
+	n∇²ζ[:,:,1] = n∇²ζ[:,:,2]
+	n∇²ζ[:,:,end] = n∇²ζ[:,:,end-1]
+	
+	nζxy = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nζxy[:,:,2:end-1] = ζxy 
+	nζxy[:,:,1] = nζxy[:,:,2]
+	nζxy[:,:,end] = nζxy[:,:,end-1]
 	
 	nψ̄xπ = Array{Float64, 3}(undef, nx, ny, nz+2)
 	nψ̄xπ[:,:,2:end-1] = ψ̄xπ
@@ -168,6 +215,11 @@ begin
 	nψ̄yy[:,:,2:end-1] = ψ̄yy
 	nψ̄yy[:,:,1] = nψ̄yy[:,:,2]
 	nψ̄yy[:,:,end] = nψ̄yy[:,:,end-1]
+
+	nψ̄xy = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nψ̄xy[:,:,2:end-1] = ψ̄xy 
+	nψ̄xy[:,:,1] = nψ̄xy[:,:,2]
+	nψ̄xy[:,:,end] = nψ̄xy[:,:,end-1]
 	
 	n∇f∇ζ = Array{Float64, 3}(undef, nx, ny, nz+2)
 	n∇f∇ζ[:,:,2:end-1] = ∇f∇ζ
@@ -183,48 +235,108 @@ begin
 	n∇f∇ψ̄yπ[:,:,2:end-1] = ∇f∇ψ̄yπ
 	n∇f∇ψ̄yπ[:,:,1] = n∇f∇ψ̄yπ[:,:,2]
 	n∇f∇ψ̄yπ[:,:,end] = n∇f∇ψ̄yπ[:,:,end-1]
+
+	n∂xxψ̄xπ  = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∂xxψ̄xπ[:,:,2:end-1] = ∂xxψ̄xπ
+	n∂xxψ̄xπ[:,:,1] = n∂xxψ̄xπ[:,:,2]
+	n∂xxψ̄xπ[:,:,end] = n∂xxψ̄xπ[:,:,end-1]
 	
-	nζxx   = Array{Float64, 3}(undef, nx, ny, nz+2)
-	nζxx[:,:,2:end-1] = ζxx
-	nζxx[:,:,1] = nζxx[:,:,2]
-	nζxx[:,:,end] = nζxx[:,:,end-1]
+	n∂yyψ̄yπ  = Array{Float64, 3}(undef, nx, ny, nz+2) 
+	n∂yyψ̄yπ[:,:,2:end-1] = ∂yyψ̄yπ
+	n∂yyψ̄yπ[:,:,1] = n∂yyψ̄yπ[:,:,2]
+	n∂yyψ̄yπ[:,:,end] = n∂yyψ̄yπ[:,:,end-1]
 	
-	nζyy   = Array{Float64, 3}(undef, nx, ny, nz+2)
-	nζyy[:,:,2:end-1] = ζyy
-	nζyy[:,:,1] = nζyy[:,:,2]
-	nζyy[:,:,end] = nζyy[:,:,end-1]
-	
-	nψ̄xπxx  = Array{Float64, 3}(undef, nx, ny, nz+2)
-	nψ̄xπxx[:,:,2:end-1] = ψ̄xπxx
-	nψ̄xπxx[:,:,1] = nψ̄xπxx[:,:,2]
-	nψ̄xπxx[:,:,end] = nψ̄xπxx[:,:,end-1]
-	
-	nψ̄xπyy  = Array{Float64, 3}(undef, nx, ny, nz+2) 
-	nψ̄xπyy[:,:,2:end-1] = ψ̄xπyy
-	nψ̄xπyy[:,:,1] = nψ̄xπyy[:,:,2]
-	nψ̄xπyy[:,:,end] = nψ̄xπyy[:,:,end-1]
-	
-	nψ̄yπxx  = Array{Float64, 3}(undef, nx, ny, nz+2) 
-	nψ̄yπxx[:,:,2:end-1] = ψ̄yπxx
-	nψ̄yπxx[:,:,1] = nψ̄yπxx[:,:,2]
-	nψ̄yπxx[:,:,end] = nψ̄yπxx[:,:,end-1]
+	n∂xxψ̄yπ  = Array{Float64, 3}(undef, nx, ny, nz+2) 
+	n∂xxψ̄yπ[:,:,2:end-1] = ∂xxψ̄yπ
+	n∂xxψ̄yπ[:,:,1] = n∂xxψ̄yπ[:,:,2]
+	n∂xxψ̄yπ[:,:,end] = n∂xxψ̄yπ[:,:,end-1]
 		
-	nψ̄yπyy  = Array{Float64, 3}(undef, nx, ny, nz+2)
-	nψ̄yπyy[:,:,2:end-1] =ψ̄yπyy
-	nψ̄yπyy[:,:,1] = ψ̄yπyy[:,:,2]
-	nψ̄yπyy[:,:,end] = ψ̄yπyy[:,:,end-1]
+	n∂yyψ̄xπ  = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∂yyψ̄xπ[:,:,2:end-1] = ∂yyψ̄xπ
+	n∂yyψ̄xπ[:,:,1] = ∂yyψ̄xπ[:,:,2]
+	n∂yyψ̄xπ[:,:,end] = ∂yyψ̄xπ[:,:,end-1]
 	
-	nψ  = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nψ = Array{Float64, 3}(undef, nx, ny, nz+2)
 	nψ[:,:,2:end-1] = ψ5
 	nψ[:,:,1] = nψ[:,:,2]
 	nψ[:,:,end] = nψ[:,:,end-1]
+
+	nϕ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nϕ[:,:,2:end-1] = ϕ5
+	nϕ[:,:,1] = nϕ[:,:,2]
+	nϕ[:,:,end] = nϕ[:,:,end-1]
+
+	n∂xψ̄xπ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∂xψ̄xπ[:,:,2:end-1] = ∂xψ̄xπ
+	n∂xψ̄xπ[:,:,1] = n∂xψ̄xπ[:,:,2]
+	n∂xψ̄xπ[:,:,end] = n∂xψ̄xπ[:,:,end-1]
+	
+	n∂yψ̄xπ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∂yψ̄xπ[:,:,2:end-1] = ∂yψ̄xπ
+	n∂yψ̄xπ[:,:,1] = n∂yψ̄xπ[:,:,2]
+	n∂yψ̄xπ[:,:,end] = n∂yψ̄xπ[:,:,end-1]
+
+	n∂xyψ̄xπ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∂xyψ̄xπ[:,:,2:end-1] = ∂xyψ̄xπ
+	n∂xyψ̄xπ[:,:,1] = n∂xyψ̄xπ[:,:,2]
+	n∂xyψ̄xπ[:,:,end] = n∂xyψ̄xπ[:,:,end-1]
+	
+	n∇²ψ̄xπ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∇²ψ̄xπ[:,:,2:end-1] = ∇²ψ̄xπ 
+	n∇²ψ̄xπ[:,:,1] = n∇²ψ̄xπ[:,:,2]
+	n∇²ψ̄xπ[:,:,end] = n∇²ψ̄xπ[:,:,end-1]
+
+	n∂xψ̄yπ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∂xψ̄yπ[:,:,2:end-1] = ∂xψ̄yπ
+	n∂xψ̄yπ[:,:,1] = n∂xψ̄yπ[:,:,2]
+	n∂xψ̄yπ[:,:,end] = n∂xψ̄yπ[:,:,end-1]
+	
+	n∂yψ̄yπ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∂yψ̄yπ[:,:,2:end-1] = ∂yψ̄yπ
+	n∂yψ̄yπ[:,:,1] = n∂yψ̄yπ[:,:,2]
+	n∂yψ̄yπ[:,:,end] = n∂yψ̄yπ[:,:,end-1]
+	
+	n∂xyψ̄yπ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∂xyψ̄yπ[:,:,2:end-1] = ∂xyψ̄yπ
+	n∂xyψ̄yπ[:,:,1] = n∂xyψ̄yπ[:,:,2]
+	n∂xyψ̄yπ[:,:,end] = n∂xyψ̄yπ[:,:,end-1]
+	
+	n∇²ψ̄yπ = Array{Float64, 3}(undef, nx, ny, nz+2)
+	n∇²ψ̄yπ[:,:,2:end-1] = ∇²ψ̄yπ
+	n∇²ψ̄yπ[:,:,1] = n∇²ψ̄yπ[:,:,2]
+	n∇²ψ̄yπ[:,:,end] = n∇²ψ̄yπ[:,:,end-1]
+
+	nfx = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nfx[:,:,2:end-1] =  fᵢ
+	nfx[:,:,1] = nfx[:,:,2]
+	nfx[:,:,end] = nfx[:,:,end-1]
+
+	nfy = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nfy[:,:,2:end-1] = fⱼ
+	nfy[:,:,1] = nfy[:,:,2]
+	nfy[:,:,end] = nfy[:,:,end-1]
+
+	nf = Array{Float64, 3}(undef, nx, ny, nz+2)
+	nf[:,:,2:end-1] = f_3d
+	nf[:,:,1] = nf[:,:,2]
+	nf[:,:,end] = nf[:,:,end-1]
+	String("5 levels interior, 7 levels in total")
 end
 
-# ╔═╡ dc939159-6cec-4fa2-b3ef-8d43a53b8bf7
-# npzwrite("varphi5lev_inv_consts.npz", Dict("ϕ̄ππ"=>ϕ̄ππ, "ϕ̄xπ"=>ϕ̄xπ, "ϕ̄yπ"=>ϕ̄yπ, "∇²ϕ̄ππ"=>∇²ϕ̄ππ, "∇²ϕ̄xπ"=>∇²ϕ̄xπ, "∇²ϕ̄yπ"=>∇²ϕ̄yπ, "ζ"=>ζ, "ψ̄xπ"=>ψ̄xπ, "ψ̄yπ"=>ψ̄yπ, "ψ̄xx"=>ψ̄xx, "ψ̄yy"=>ψ̄yy, "∇f∇ζ"=>∇f∇ζ, "∇f∇ψ̄xπ"=>∇f∇ψ̄xπ, "∇f∇ψ̄yπ"=>∇f∇ψ̄yπ, "ζxx"=>ζxx, "ζyy"=>ζyy, "ψ̄xπxx"=>ψ̄xπxx, "ψ̄xπyy"=>ψ̄xπyy, "ψ̄yπxx"=>ψ̄yπxx, "ψ̄yπyy"=>ψ̄yπyy, "ψ"=>ψ5))
-
-# ╔═╡ 8f125b3f-fb96-4829-98b0-1aeb237201fa
-# npzwrite("varphi5extlev_inv_consts.npz", Dict("ϕ̄ππ"=>nϕ̄ππ, "ϕ̄xπ"=>nϕ̄xπ, "ϕ̄yπ"=>nϕ̄yπ, "∇²ϕ̄ππ"=>n∇²ϕ̄ππ, "∇²ϕ̄xπ"=>n∇²ϕ̄xπ, "∇²ϕ̄yπ"=>n∇²ϕ̄yπ, "ζ"=>nζ, "ψ̄xπ"=>nψ̄xπ, "ψ̄yπ"=>nψ̄yπ, "ψ̄xx"=>nψ̄xx, "ψ̄yy"=>nψ̄yy, "∇f∇ζ"=>n∇f∇ζ, "∇f∇ψ̄xπ"=>n∇f∇ψ̄xπ, "∇f∇ψ̄yπ"=>n∇f∇ψ̄yπ, "ζxx"=>nζxx, "ζyy"=>nζyy, "ψ̄xπxx"=>nψ̄xπxx, "ψ̄xπyy"=>nψ̄xπyy, "ψ̄yπxx"=>nψ̄yπxx, "ψ̄yπyy"=>nψ̄yπyy, "ψ"=>nψ))
+# ╔═╡ f310bfb3-7e12-43e2-ade2-52911068ee3d
+npzwrite("varphi5extlev_inv_consts.npz", Dict(
+	"ϕ̄ππ"=>nϕ̄ππ, "ϕ̄xπ"=>nϕ̄xπ, "ϕ̄yπ"=>nϕ̄yπ,
+	"∇²ϕ̄ππ"=>n∇²ϕ̄ππ, "∇²ϕ̄xπ"=>n∇²ϕ̄xπ, "∇²ϕ̄yπ"=>n∇²ϕ̄yπ, 
+	"ζ"=>nζ, "ζx"=>nζx, "ζy"=>nζy, "ζxx"=>nζxx,
+	"ζyy"=>nζyy, "∇²ζ"=>n∇²ζ, "ζxy"=>nζxy,
+	"ψ̄xπ"=>nψ̄xπ, "ψ̄yπ"=>nψ̄yπ, "ψ̄xx"=>nψ̄xx, 
+	"ψ̄yy"=>nψ̄yy, "ψ̄xy"=>nψ̄xy,
+	"∇f∇ζ"=>n∇f∇ζ, "∇f∇ψ̄xπ"=>n∇f∇ψ̄xπ, "∇f∇ψ̄yπ"=>n∇f∇ψ̄yπ,
+	"∂xxψ̄xπ"=>n∂xxψ̄xπ, "∂yyψ̄yπ"=>n∂yyψ̄yπ, "∂xxψ̄yπ"=>n∂xxψ̄yπ, "∂yyψ̄xπ"=>n∂yyψ̄xπ,
+	"ψ"=>nψ, "ϕ"=>nϕ,
+	"∂xψ̄xπ"=>n∂xψ̄xπ, "∂yψ̄xπ"=>n∂yψ̄xπ, "∂xyψ̄xπ"=>n∂xyψ̄xπ,  "∇²ψ̄xπ"=>n∇²ψ̄xπ,  
+	"∂xψ̄yπ"=>n∂xψ̄yπ, "∂yψ̄yπ"=>n∂yψ̄yπ, "∂xyψ̄yπ"=>n∂xyψ̄yπ, "∇²ψ̄yπ"=>n∇²ψ̄yπ, 
+	"fx"=>nfx, "fy"=>nfy, "f"=>nf))
 
 # ╔═╡ 76986a6f-6c90-4133-a368-3b24c2520843
 # npzwrite("general5lev_consts.npz", Dict("fᵢ"=>fᵢ[:,:,1], "fⱼ"=>fⱼ[:,:,1], "A"=>A5, "rdx"=>rdx, "rdx2"=>rdx^2, "rdx3"=>rdx^3, "rdy"=>rdy, "rdy2"=>rdy^2, "rdy3"=>rdy^3, "m"=>msfm_2d, "m2"=>msfm_2d.^2, "m3"=>msfm_2d.^3, "dπ"=>dπ5, "f"=> f_2d))
@@ -527,8 +639,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═befba63a-994f-4f28-8514-b88ac6d91ddb
 # ╠═68ccb535-595e-4309-bda1-cea3df0cc9d2
 # ╠═1d39f3e0-3b9b-402e-8cec-7c6cb4bd7b3b
-# ╠═dc939159-6cec-4fa2-b3ef-8d43a53b8bf7
-# ╠═8f125b3f-fb96-4829-98b0-1aeb237201fa
+# ╠═f310bfb3-7e12-43e2-ade2-52911068ee3d
 # ╠═76986a6f-6c90-4133-a368-3b24c2520843
 # ╠═028992f1-a88a-43ca-b2f4-ddb5ed8ff2e4
 # ╠═0eb8b998-89c1-4591-9e8f-0c391ac7dd32
