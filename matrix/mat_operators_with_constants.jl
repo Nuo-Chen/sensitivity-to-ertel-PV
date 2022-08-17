@@ -97,7 +97,7 @@ begin
 		
 	G = st.gconst(gc["fᵢ"], gc["fⱼ"], gc["A"], gc["rdx"], gc["rdx2"], gc["rdx3"], gc["rdy"], gc["rdy2"], gc["rdy3"], gc["m"], gc["m2"], gc["m3"], gc["dπ"], gc["f"])
 
-	    h = dπ
+	h = dπ
     dx = itv * rdx
     dy = itv * rdy
     rdx2 = rdx^2 ; rdy2 = rdy^2;
