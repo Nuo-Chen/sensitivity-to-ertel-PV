@@ -7,9 +7,11 @@ using InteractiveUtils
 # ╔═╡ 087626d2-dd26-11ec-2371-cd85f62600fe
 begin
     import Pkg
-   	Pkg.activate()
+    Pkg.activate("../")
 	#using Plots
 	using NPZ
+	using SparseArrays
+	using JLD
 	#using PlutoUI
 end
 
@@ -58,7 +60,7 @@ begin
     nzs = size(idx)[1] + 2
     
     itv = 2
-	slicex = 45:itv:130
+	slicex = 30:itv:130
 	slicey = 40:itv:110
 	
 	nxs = size(slicex)[1]
@@ -923,6 +925,9 @@ begin
 	String("Operator (TϕRψ + TψRΦ) on q̂")
 end
 
+# ╔═╡ 154e14a6-b8cd-4506-a2e3-ee4cd2a0b539
+# npzwrite("varphiP_mat.npy", varphiP_mat)
+
 # ╔═╡ 5ac112e9-707e-44f0-aca2-4f6d3816ee90
 # begin
 # 	# A1 = ∇²Φ̄ππ ∇² q̂ 
@@ -1065,8 +1070,11 @@ end
 # 	String("TϕRψ - TψRΦ")
 # end
 
-# ╔═╡ 154e14a6-b8cd-4506-a2e3-ee4cd2a0b539
-npzwrite("varphiP_mat.npy", φP)
+# ╔═╡ 898a683e-2b6c-4a24-a06b-346898a9f68d
+begin
+	φPsp = sparse(φP)
+	save("varphiP_mat.jld", "varphiP", φPsp)
+end
 
 # ╔═╡ Cell order:
 # ╠═087626d2-dd26-11ec-2371-cd85f62600fe
@@ -1081,5 +1089,6 @@ npzwrite("varphiP_mat.npy", φP)
 # ╟─59586306-5cd6-4fc5-bb19-62d9153c077a
 # ╠═050fcd6b-4d2b-45e5-b1d5-9b02ebdd97ab
 # ╠═b7a71daf-0f28-4bcc-8393-05d8dbd6e179
-# ╟─5ac112e9-707e-44f0-aca2-4f6d3816ee90
 # ╠═154e14a6-b8cd-4506-a2e3-ee4cd2a0b539
+# ╟─5ac112e9-707e-44f0-aca2-4f6d3816ee90
+# ╠═898a683e-2b6c-4a24-a06b-346898a9f68d
